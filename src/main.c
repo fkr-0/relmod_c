@@ -1,8 +1,9 @@
 /* ======= main.c ======= */
+#include <stdio.h>
+#include "version.h"
 #include "example_menu.h"
 #include "input_handler.h"
 #include "menu.h"
-#include <stdio.h>
 #include <stdlib.h>
 #include <xcb/xcb.h>
 
@@ -14,7 +15,9 @@ bool example_menu_action(uint8_t keycode, void *user_data) {
 
 void example_cleanup(void *user_data) { printf("Menu cleaned up\n"); }
 
-int main(void) {
+int main(int argc, char *argv[]) {
+  printf("X11 Input Handler v%s\n", VERSION);
+
   xcb_connection_t *conn = xcb_connect(NULL, NULL);
   if (xcb_connection_has_error(conn)) {
     fprintf(stderr, "Failed to connect to X server\n");
