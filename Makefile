@@ -4,15 +4,15 @@ VERSION_PATCH = 0
 VERSION = $(VERSION_MAJOR).$(VERSION_MINOR).$(VERSION_PATCH)
 
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c11 `pkg-config --cflags xcb check` --coverage -g -O0 -DVERSION=\"$(VERSION)\" -I$(SRC_DIR)
-LIBS = `pkg-config --libs xcb check`
+CFLAGS = -Wall -Wextra -std=c11 `pkg-config --cflags xcb check cairo cairo-xcb` --coverage -g -O0 -DVERSION=\"$(VERSION)\" -I$(SRC_DIR)
+LIBS = `pkg-config --libs xcb check cairo cairo-xcb`
 LDFLAGS = -lX11 -lxcb-ewmh -lxcb -lxcb-keysyms -lxcb-xkb -lxcb-icccm --coverage
 
 SRC_DIR = src
 TEST_DIR = tests
 BUILD_DIR = build
 
-SRCS = $(SRC_DIR)/menu.c $(SRC_DIR)/input_handler.c $(SRC_DIR)/example_menu.c $(SRC_DIR)/main.c $(SRC_DIR)/x11_focus.c
+SRCS = $(SRC_DIR)/menu.c $(SRC_DIR)/input_handler.c $(SRC_DIR)/example_menu.c $(SRC_DIR)/main.c $(SRC_DIR)/x11_focus.c $(SRC_DIR)/cairo_menu.c
 TESTS = $(TEST_DIR)/test_menu.c $(TEST_DIR)/test_input_handler.c
 OBJS = $(SRCS:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
 TEST_OBJS = $(TESTS:$(TEST_DIR)/%.c=$(BUILD_DIR)/%.o)
@@ -29,7 +29,7 @@ $(BUILD_DIR)/%.o: $(TEST_DIR)/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/x11_input_example: $(OBJS) | $(BUILD_DIR)
-	$(CC) $(OBJS) -o $@ $(LDFLAGS)
+	$(CC) $(OBJS) -o $@ $(LDFLAGS) $(LIBS)
 
 $(BUILD_DIR)/test_menu: $(BUILD_DIR)/test_menu.o $(BUILD_DIR)/example_menu.o $(BUILD_DIR)/menu.o $(BUILD_DIR)/x11_focus.o | $(BUILD_DIR)
 	$(CC) $^ -o $@ $(LIBS) $(LDFLAGS)

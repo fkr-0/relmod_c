@@ -1,9 +1,10 @@
 /* ======= main.c ======= */
-#include <stdio.h>
-#include "version.h"
+#include "cairo_menu.h"
 #include "example_menu.h"
 #include "input_handler.h"
 #include "menu.h"
+#include "version.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <xcb/xcb.h>
 
@@ -40,8 +41,12 @@ int main(int argc, char *argv[]) {
   InputHandler *handler =
       input_handler_create(conn, &ewmh, root); // Initialize input handler
 
-  MenuConfig menu = example_menu_create(XCB_MOD_MASK_4);
-  input_handler_add_menu(handler, menu);
+  /* MenuConfig menu = example_menu_create(XCB_MOD_MASK_4); */
+  char *menu_items[] = {"Browser", "Terminal", "Editor", "Settings"};
+
+  MenuConfig popup_menu =
+      cairo_menu_create(conn, root, XCB_MOD_MASK_4, menu_items, 4);
+  input_handler_add_menu(handler, popup_menu);
 
   input_handler_run(handler); // Main loop
 

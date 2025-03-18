@@ -9,6 +9,7 @@
 #define MAX_MENUS 10
 
 typedef struct {
+  uint16_t modifier_mask;
   xcb_connection_t *conn;
   X11FocusContext *focus_ctx;
   MenuContext *menus[MAX_MENUS];
