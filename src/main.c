@@ -15,8 +15,8 @@ static void demo_action(void *user_data) {
   printf("Selected item: %s\n", item_id);
 }
 
-/* Create an example menu using Cairo */
-static Menu *create_demo_menu(xcb_connection_t *conn, xcb_window_t root) {
+/* Create an example menu configuration */
+static MenuConfig create_demo_menu_config() {
   static MenuItem items[] = {{.id = "item1",
                               .label = "Option 1",
                               .action = demo_action,
@@ -53,7 +53,7 @@ static Menu *create_demo_menu(xcb_connection_t *conn, xcb_window_t root) {
                 .item_height = 20,
                 .padding = 10}};
 
-  return cairo_menu_create(conn, root, &config);
+  return config;
 }
 
 int main(int argc, char *argv[]) {
@@ -98,13 +98,14 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
 
-  /* Create and register menus */
-  /* Menu* demo_menu = create_demo_menu(conn, root); */
-  /* if (!demo_menu) { */
-  /*     fprintf(stderr, "Failed to create demo menu\n"); */
-  /*     goto cleanup; */
-  /* } */
-  /* menu_manager_register(handler->menu_manager, demo_menu); */
+  /* Initialize and register menus */
+  MenuConfig demo_menu_config = create_demo_menu_config();
+  Menu *demo_menu = cairo_menu_init(&demo_menu_config);
+  if (!demo_menu) {
+    fprintf(stderr, "Failed to initialize demo menu\n");
+    goto cleanup;
+  }
+  menu_manager_register(handler->menu_manager, demo_menu);
 
   /* Create window menu configuration */
   WindowMenuConfig window_config =
@@ -126,10 +127,10 @@ int main(int argc, char *argv[]) {
                 .font_size = 14.0,
                 .item_height = 20,
                 .padding = 10}};
-  Menu *window_menu = cairo_menu_create(conn, root, &window_menu_config);
+  Menu *window_menu = cairo_menu_init(&window_menu_config);
 
   if (!window_menu) {
-    fprintf(stderr, "Failed to create window menu\n");
+    fprintf(stderr, "Failed to initialize window menu\n");
     goto cleanup;
   }
   menu_manager_register(handler->menu_manager, window_menu);

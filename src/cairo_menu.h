@@ -1,27 +1,20 @@
-/* cairo_menu.h - Cairo-based menu rendering */
+/* cairo_menu.h */
+
 #ifndef CAIRO_MENU_H
 #define CAIRO_MENU_H
 
-#include "menu.h"
-#include "menu_animation.h"
-#include <cairo/cairo.h>
+#include <stdbool.h>
 #include <xcb/xcb.h>
+#include <xcb/xcb_ewmh.h>
+#include "menu.h"
 
-/* Create a Cairo-rendered menu */
-Menu* cairo_menu_create(xcb_connection_t* conn,
-                       xcb_window_t parent,
-                       MenuConfig* config);
+Menu *cairo_menu_create(xcb_connection_t *conn, xcb_window_t root,
+                        const MenuConfig *config);
+void cairo_menu_destroy(Menu *menu);
+void cairo_menu_show(Menu *menu);
+void cairo_menu_hide(Menu *menu);
 
-/* Animation configuration */
-void cairo_menu_set_animation(Menu* menu, 
-                            MenuAnimationType show_anim,
-                            MenuAnimationType hide_anim,
-                            double duration);
+// New function to initialize menu configuration
+Menu *cairo_menu_init(const MenuConfig *config);
 
-/* Custom animation sequences */
-void cairo_menu_set_show_sequence(Menu* menu, 
-                                MenuAnimationSequence* sequence);
-void cairo_menu_set_hide_sequence(Menu* menu, 
-                                MenuAnimationSequence* sequence);
-
-#endif /* CAIRO_MENU_H */
+#endif // CAIRO_MENU_H
