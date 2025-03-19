@@ -4,22 +4,10 @@
 
 #include "menu.h"
 #include "menu_animation.h"
+#include "cairo_menu_render.h"
 #include <cairo/cairo.h>
 #include <stdbool.h>
 #include <sys/time.h>
-
-/* Menu animation data */
-typedef struct CairoMenuAnimData {
-    MenuAnimation* show_animation;
-    MenuAnimation* hide_animation;
-    MenuAnimationSequence* show_sequence;
-    MenuAnimationSequence* hide_sequence;
-    struct timeval last_frame;
-    bool is_animating;
-} CairoMenuAnimData;
-
-/* Forward declaration */
-typedef struct CairoMenuData CairoMenuData;
 
 /* Animation management */
 void cairo_menu_animation_init(CairoMenuData* data);

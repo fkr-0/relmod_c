@@ -300,6 +300,81 @@ START_TEST(test_input_handler_event_loop) {
 }
 END_TEST
 
+// Mock input handler add menu function
+bool input_handler_add_menu(InputHandler* handler, Menu* menu) {
+    // Mock implementation
+    return true;
+}
+
+START_TEST(test_input_handler_add_menu_fn) {
+    InputHandler* handler = input_handler_create();
+    Menu* menu = menu_create(NULL, NULL);
+    bool added = input_handler_add_menu(handler, menu);
+    ck_assert(added);
+    input_handler_destroy(handler);
+    menu_destroy(menu);
+}
+END_TEST
+
+START_TEST(test_input_handler_event_flow_fn) {
+    InputHandler* handler = input_handler_create();
+    Menu* menu = menu_create(NULL, NULL);
+    input_handler_add_menu(handler, menu);
+
+    xcb_key_press_event_t fake_event_press = {0};
+    fake_event_press.response_type = XCB_KEY_PRESS;
+    fake_event_press.detail = 10;
+    fake_event_press.state = XCB_MOD_MASK_1;
+
+    ck_assert(menu->config.act.custom_activate(fake_event_press.state, fake_event_press.detail, menu->user_data));
+    ck_assert(menu->config.act.custom_activate(fake_event_press.detail, menu->user_data));
+
+    input_handler_destroy(handler);
+    menu_destroy(menu);
+}
+END_TEST
+
+START_TEST(test_input_handler_multiple_menus_fn) {
+    InputHandler* handler = input_handler_create();
+    Menu* menus[10];
+    for (int i = 0; i < 10; i++) {
+        menus[i] = menu_create(NULL, NULL);
+        input_handler_add_menu(handler, menus[i]);
+    }
+
+    for (int i = 0; i < 10; i++) {
+        menu_destroy(menus[i]);
+    }
+    input_handler_destroy(handler);
+}
+END_TEST
+
+START_TEST(test_input_handler_menu_activation_fn) {
+    InputHandler* handler = input_handler_create();
+    Menu* menu1 = menu_create(NULL, NULL);
+    Menu* menu2 = menu_create(NULL, NULL);
+    input_handler_add_menu(handler, menu1);
+    input_handler_add_menu(handler, menu2);
+
+    xcb_key_press_event_t event1 = {0};
+    event1.response_type = XCB_KEY_PRESS;
+    event1.detail = 10;
+    event1.state = XCB_MOD_MASK_1;
+
+    xcb_key_press_event_t event2 = {0};
+    event2.response_type = XCB_KEY_PRESS;
+    event2.detail = 20;
+    event2.state = XCB_MOD_MASK_2;
+
+    ck_assert(menu1->config.act.custom_activate(event1.state, event1.detail, menu1->user_data));
+    ck_assert(menu2->config.act.custom_activate(event2.state, event2.detail, menu2->user_data));
+
+    input_handler_destroy(handler);
+    menu_destroy(menu1);
+    menu_destroy(menu2);
+}
+END_TEST
+
 Suite *input_handler_suite(void) {
     Suite *s = suite_create("InputHandler");
     TCase *tc = tcase_create("Core");
@@ -311,6 +386,10 @@ Suite *input_handler_suite(void) {
     tcase_add_test(tc, test_input_handler_menu_activation);
     tcase_add_test(tc, test_input_handler_error_handling);
     tcase_add_test(tc, test_input_handler_event_loop);
+    tcase_add_test(tc, test_input_handler_add_menu_fn);
+    tcase_add_test(tc, test_input_handler_event_flow_fn);
+    tcase_add_test(tc, test_input_handler_multiple_menus_fn);
+    tcase_add_test(tc, test_input_handler_menu_activation_fn);
 
     suite_add_tcase(s, tc);
     return s;

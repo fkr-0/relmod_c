@@ -6,6 +6,7 @@
 #include <cairo/cairo.h>
 #include <stdbool.h>
 #include <xcb/xcb.h>
+#include "menu_animation.h"
 
 /* Menu rendering data */
 typedef struct CairoMenuRenderData {
@@ -17,10 +18,22 @@ typedef struct CairoMenuRenderData {
     bool needs_redraw;           /* Redraw flag */
 } CairoMenuRenderData;
 
+/* Menu animation data */
+typedef struct CairoMenuAnimData {
+    MenuAnimation* show_animation;
+    MenuAnimation* hide_animation;
+    MenuAnimationSequence* show_sequence;
+    MenuAnimationSequence* hide_sequence;
+    struct timeval last_frame;
+    bool is_animating;
+} CairoMenuAnimData;
+
 /* Combined menu data */
 typedef struct CairoMenuData {
     xcb_connection_t* conn;      /* X11 connection */
     CairoMenuRenderData render;  /* Rendering data */
+    CairoMenuAnimData anim;      /* Animation data */
+    Menu* menu;                  /* Menu reference */
 } CairoMenuData;
 
 /* Rendering initialization */
