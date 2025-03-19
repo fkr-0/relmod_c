@@ -6,8 +6,17 @@
 #include <cairo/cairo-xcb.h>
 #include <xcb/xcb.h>
 
+// Window menu configuration structure
+typedef struct {
+    uint16_t modifier_mask;
+    bool (*activate_cb)(uint16_t modifiers, uint8_t keycode, void* user_data);
+    bool (*action_cb)(uint8_t keycode, void* user_data);
+    void (*cleanup_cb)(void* user_data);
+    void* user_data;
+} WindowMenuConfig;
+
 // Create a window management menu that displays and controls window list
-MenuConfig window_menu_create(xcb_connection_t *conn,
+WindowMenuConfig window_menu_create(xcb_connection_t *conn,
                               xcb_window_t parent_window,
                               uint16_t modifier_mask, WindowList *window_list);
 

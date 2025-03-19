@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        compiler: [gcc, clang]
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libxcb1-dev \
+          libxcb-ewmh-dev \
+          libcairo2-dev \
+          libx11-dev \
+          xvfb \
+          lcov \
+          clang-tidy
+
+    - name: Configure compiler
+      run: |
+        if [ "${{ matrix.compiler }}" = "clang" ]; then
+          echo "CC=clang" >> $GITHUB_ENV
+        else
+          echo "CC=gcc" >> $GITHUB_ENV
+        fi
+
+    - name: Build
+      run: make all
+
+    - name: Static Analysis
+      if: matrix.compiler == 'clang'
+      run: |
+        clang-tidy src/*.c \
+          -checks=*,-clang-analyzer-security.insecureAPI.strcpy \
+          -- -I/usr/include/cairo -I/usr/include/xcb
+
+    - name: Run Tests
+      run: |
+        chmod +x tests/run_tests.sh
+        xvfb-run -a ./tests/run_tests.sh
+
+    - name: Generate Coverage
+      if: matrix.compiler == 'gcc'
+      run: |
+        make clean
+        make test-coverage
+        lcov --capture --directory . --output-file coverage.info
+        lcov --remove coverage.info '/usr/*' --output-file coverage.info
+        genhtml coverage.info --output-directory coverage
+
+    - name: Upload Coverage Report
+      if: matrix.compiler == 'gcc'
+      uses: actions/upload-artifact@v2
+      with:
+        name: coverage-report
+        path: coverage
+
+    - name: Analyze with cppcheck
+      run: |
+        sudo apt-get install -y cppcheck
+        cppcheck --enable=all --suppress=missingIncludeSystem src/
+
+  memory-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libxcb1-dev \
+          libxcb-ewmh-dev \
+          libcairo2-dev \
+          libx11-dev \
+          xvfb \
+          valgrind
+
+    - name: Build for Valgrind
+      run: make clean && make all CFLAGS="-g -O0"
+
+    - name: Run Valgrind
+      run: |
+        xvfb-run -a valgrind \
+          --leak-check=full \
+          --show-leak-kinds=all \
+          --track-origins=yes \
+          --error-exitcode=1 \
+          ./build/menu_system
+
+  sanitizers:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libxcb1-dev \
+          libxcb-ewmh-dev \
+          libcairo2-dev \
+          libx11-dev \
+          xvfb
+
+    - name: Build and test with sanitizers
+      run: |
+        make clean
+        xvfb-run -a ./tests/run_tests.sh
+
+  performance:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libxcb1-dev \
+          libxcb-ewmh-dev \
+          libcairo2-dev \
+          libx11-dev \
+          xvfb \
+          linux-tools-generic
+
+    - name: Build for profiling
+      run: make clean && make all CFLAGS="-g -pg"
+
+    - name: Run performance tests
+      run: |
+        xvfb-run -a perf record -g ./build/menu_system
+        perf report --stdio

@@ -1,36 +1,30 @@
-/* input_handler.h */
+/* input_handler.h - Input handling and event routing */
 #ifndef INPUT_HANDLER_H
 #define INPUT_HANDLER_H
 
-#include "menu.h"
+#include "menu_manager.h"
 #include "x11_focus.h"
 #include <xcb/xcb.h>
 
-#define MAX_MENUS 10
-
 typedef struct {
-  uint16_t modifier_mask;
-  xcb_connection_t *conn;
-  X11FocusContext *focus_ctx;
-  MenuContext *menus[MAX_MENUS];
-  size_t menu_count;
+    uint16_t modifier_mask;
+    xcb_connection_t* conn;
+    X11FocusContext* focus_ctx;
+    MenuManager* menu_manager;    /* Replace array with manager */
 } InputHandler;
 
-// Create input handler without menus initially
-InputHandler *input_handler_create(xcb_connection_t *conn,
-                                   xcb_ewmh_connection_t *ewmh,
-                                   xcb_window_t window);
+/* Initialize input handler with menu manager */
+InputHandler* input_handler_create(xcb_connection_t* conn,
+                                 xcb_ewmh_connection_t* ewmh,
+                                 xcb_window_t window);
 
-// Dynamically add menu configuration
-bool input_handler_add_menu(InputHandler *handler, MenuConfig config);
+/* Clean up input handler resources */
+void input_handler_destroy(InputHandler* handler);
 
-// Run event loop
-void input_handler_run(InputHandler *handler);
+/* Process a single input event */
+bool input_handler_process_event(InputHandler* handler);
 
-// Process a single event (for testing)
-bool input_handler_process_event(InputHandler *handler);
+/* Run the main event loop */
+void input_handler_run(InputHandler* handler);
 
-// Cleanup resources
-void input_handler_destroy(InputHandler *handler);
-
-#endif
+#endif /* INPUT_HANDLER_H */

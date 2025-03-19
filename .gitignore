@@ -1,11 +1,58 @@
-.DS_Store
-.idea
-*.log
-*.info
-*.gcda
-*.gcno
-tmp/
-coverage_report/
-.vscode
-*.o
+# Build output
 build/
+*.o
+*.d
+*.a
+*.so
+*.dylib
+menu_system
+
+# Test output
+tests/build/
+*.gcno
+*.gcda
+*.gcov
+coverage/
+coverage.info
+test_report.html
+valgrind.log
+perf.data
+perf.data.old
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Dependencies
+/vendor/
+/third_party/
+
+# Generated files
+*.log
+*.tmp
+*.bak
+*.cache
+
+# Python cache (for test reporting)
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Temporary files
+/tmp/
+*.tmp
+*.temp
+
+# Documentation generated files
+/docs/html/
+/docs/latex/
+/docs/xml/
+
+# OS specific
+.DS_Store
+.directory
+Thumbs.db

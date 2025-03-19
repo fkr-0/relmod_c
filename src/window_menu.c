@@ -137,9 +137,9 @@ static xcb_window_t create_window_menu_window(xcb_connection_t *conn,
   return window;
 }
 
-MenuConfig window_menu_create(xcb_connection_t *conn,
-                              xcb_window_t parent_window,
-                              uint16_t modifier_mask, WindowList *window_list) {
+WindowMenuConfig window_menu_create(xcb_connection_t *conn,
+                             xcb_window_t parent_window,
+                             uint16_t modifier_mask, WindowList *window_list) {
   WindowMenuData *data = calloc(1, sizeof(WindowMenuData));
   data->conn = conn;
   data->window_list = window_list;
@@ -177,11 +177,11 @@ MenuConfig window_menu_create(xcb_connection_t *conn,
   // Initial draw
   draw_window_menu(data);
 
-  return (MenuConfig){.modifier_mask = modifier_mask,
-                      .activates_cb = window_menu_activates,
-                      .action_cb = window_menu_action,
-                      .cleanup_cb = window_menu_cleanup,
-                      .user_data = data};
+  return (WindowMenuConfig){.modifier_mask = modifier_mask,
+                          .activate_cb = window_menu_activates,
+                          .action_cb = window_menu_action,
+                          .cleanup_cb = window_menu_cleanup,
+                          .user_data = data};
 }
 
 xcb_window_t window_menu_get_selected(void *user_data) {
