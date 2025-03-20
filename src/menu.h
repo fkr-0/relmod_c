@@ -27,17 +27,17 @@ typedef struct {
         uint8_t key;      /* Key for next item */
         char* label;      /* Key label for display */
     } next;
-    
+
     struct {
         uint8_t key;     /* Key for previous item */
         char* label;     /* Key label for display */
     } prev;
-    
+
     struct {
         uint8_t* keys;   /* Array of direct selection keys */
         size_t count;    /* Number of direct keys */
     } direct;
-    
+
     void* extension_data; /* For future navigation extensions */
 } NavigationConfig;
 
@@ -97,7 +97,7 @@ struct Menu {
     uint16_t active_modifier;
     int selected_index;
     void* user_data;
-    
+
     /* Callbacks */
     MenuActivatesCallback activates_cb;
     MenuActionCallback action_cb;
@@ -109,6 +109,8 @@ struct Menu {
 /* Core menu API */
 Menu* menu_create(X11FocusContext* focus_ctx, MenuConfig* config);
 void menu_destroy(Menu* menu);
+
+Menu* menu_create_from_config(MenuConfig* config);
 
 bool menu_handle_key_press(Menu* menu, xcb_key_press_event_t* event);
 bool menu_handle_key_release(Menu* menu, xcb_key_release_event_t* event);

@@ -205,3 +205,27 @@ void input_handler_run(InputHandler *handler) {
     free(event);
   }
 }
+
+bool input_handler_add_menu(InputHandler *handler, MenuConfig menu_config) {
+  if (!handler || !handler->menu_manager) {
+    return false;
+  }
+  Menu *menu = menu_create_from_config(&menu_config);
+  if (!menu) {
+    return false;
+  }
+  return menu_manager_register(handler->menu_manager, menu);
+}
+
+bool input_handler_remove_menu(InputHandler *handler, MenuConfig menu_config) {
+  if (!handler || !handler->menu_manager) {
+    return false;
+  }
+  Menu *menu = menu_create_from_config(&menu_config);
+  if (!menu) {
+    return false;
+  }
+  menu_manager_unregister(handler->menu_manager, menu);
+  menu_destroy(menu);
+  return true;
+}

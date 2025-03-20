@@ -24,6 +24,8 @@ void input_handler_destroy(InputHandler* handler);
 /* Process a single input event */
 bool input_handler_process_event(InputHandler* handler);
 
+bool input_handler_add_menu(InputHandler* handler, MenuConfig menu);
+bool input_handler_remove_menu(InputHandler* handler, MenuConfig menu);
 /* Run the main event loop */
 void input_handler_run(InputHandler* handler);
 
