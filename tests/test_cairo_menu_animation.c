@@ -5,6 +5,7 @@
 
 /* Test animation initialization */
 void test_animation_init() {
+  printf("Starting test_animation_init\n"); // Add debug print
   CairoMenuData data;
   cairo_menu_animation_init(&data);
 
@@ -12,10 +13,12 @@ void test_animation_init() {
   assert(data.anim.hide_animation);
 
   cairo_menu_animation_cleanup(&data);
+  printf("Finished test_animation_init\n"); // Add debug print
 }
 
 /* Test animation updates */
 void test_animation_update() {
+  printf("Starting test_animation_update\n"); // Add debug print
   CairoMenuData data;
   cairo_menu_animation_init(&data);
 
@@ -38,9 +41,11 @@ void test_animation_update() {
   cairo_menu_animation_update(&data, &menu, delta);
 
   cairo_menu_animation_cleanup(&data);
+  printf("Finished test_animation_update\n"); // Add debug print
 }
 
 int main() {
+  printf("Starting tests\n"); // Add debug print
   test_animation_init();
   test_animation_update();
   printf("All tests passed.\n");

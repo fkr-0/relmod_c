@@ -2,11 +2,18 @@
 #include "cairo_menu_animation.h"
 #include <stdlib.h>
 #include <sys/time.h>
+#include <stdio.h> // Add this line at the top for debug prints
 
 /* Initialize animation data */
 void cairo_menu_animation_init(CairoMenuData* data) {
+    printf("Initializing cairo_menu_animation\n"); // Add debug print
     data->anim.show_animation = menu_animation_fade_in(200);  /* 200ms fade in */
+    printf("Show animation initialized: %p\n", data->anim.show_animation); // Add debug print
     data->anim.hide_animation = menu_animation_fade_out(150); /* 150ms fade out */
+    printf("Hide animation initialized: %p\n", data->anim.hide_animation); // Add debug print
+
+    data->anim.show_sequence = NULL; // Initialize to NULL
+    data->anim.hide_sequence = NULL; // Initialize to NULL
 
     if (data->anim.show_animation) {
         menu_animation_set_completion(data->anim.show_animation,
@@ -19,14 +26,20 @@ void cairo_menu_animation_init(CairoMenuData* data) {
 
     gettimeofday(&data->anim.last_frame, NULL);
     data->anim.is_animating = false;
+    printf("Finished initializing cairo_menu_animation\n"); // Add debug print
 }
 
 /* Cleanup animation data */
 void cairo_menu_animation_cleanup(CairoMenuData* data) {
+    printf("Cleaning up show animation: %p\n", data->anim.show_animation); // Add debug print
     menu_animation_destroy(data->anim.show_animation);
+    printf("Cleaning up hide animation: %p\n", data->anim.hide_animation); // Add debug print
     menu_animation_destroy(data->anim.hide_animation);
+    printf("Cleaning up show sequence: %p\n", data->anim.show_sequence); // Add debug print
     menu_animation_sequence_destroy(data->anim.show_sequence);
+    printf("Cleaning up hide sequence: %p\n", data->anim.hide_sequence); // Add debug print
     menu_animation_sequence_destroy(data->anim.hide_sequence);
+    printf("Finished cleaning up animations\n"); // Add debug print
 }
 
 /* Update animation state */
