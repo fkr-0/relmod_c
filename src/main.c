@@ -57,7 +57,7 @@ static MenuConfig create_demo_menu_config() {
 }
 
 int main(int argc, char *argv[]) {
-  printf("X11 Menu System v%s\n", VERSION);
+  printf("X11 Menu System v%s\n args %d %s", VERSION, argc, *argv);
 
   /* Connect to X server */
   xcb_connection_t *conn = xcb_connect(NULL, NULL);
