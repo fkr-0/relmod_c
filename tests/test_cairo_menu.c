@@ -1,6 +1,6 @@
+#include "cairo_menu.h"
+#include "menu.h"
 #include <assert.h>
-#include "../src/cairo_menu.h"
-#include "../src/menu.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <xcb/xcb.h>
@@ -32,7 +32,7 @@ void test_cairo_menu_create() {
   Menu *menu = cairo_menu_create(conn, screen->root, &config);
   assert(menu);
 
-  cairo_menu_destroy(menu);
+  menu_destroy(menu);
   xcb_disconnect(conn);
 }
 

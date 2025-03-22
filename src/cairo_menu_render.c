@@ -81,12 +81,10 @@ void cairo_menu_render_cleanup(CairoMenuData *data) {
 
   printf("Cleaning up window: %d\n", render->window); // Add debug print
   printf("test null: %p\n", NULL);                    // Add debug print
-  /* printf("test menu,render,anim: %p %p %p\n", data->menu, data->render, */
-  /*        data->anim); // Add debug print */
 
   if (render->window != XCB_NONE) { // Check if window is valid
     if (data->conn) {
-      // test data->conn to prevent segmenation fault,
+      // test data->conn to prevent segmentation fault,
       // only destroy if connection is initialized
       printf("Checking connection: %p\n", data->conn); // Add debug print
 

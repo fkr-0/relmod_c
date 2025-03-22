@@ -14,8 +14,9 @@ SANITIZE := -fsanitize=address -fsanitize=undefined
 COVERAGE := --coverage
 DEPFLAGS = -MT $@ -MMD -MP -MF $(BUILD_DIR)/$*.d
 
+CFLAGS += -DMENU_DEBUG
 # Include paths and libraries
-INCLUDES := -I/usr/include/cairo -I/usr/include/xcb
+INCLUDES := -I/usr/include/cairo -I/usr/include/xcb -Isrc
 LIBS := -lxcb -lxcb-ewmh -lcairo -lX11 -lm -lxcb-icccm -lgcov -lxcb-util
 
 # Source directories
@@ -88,15 +89,15 @@ test-sanitize: tests
 # Run tests with valgrind
 test-valgrind: debug
 	@for test in $(TEST_BINS); do \
-		echo "VALGRIND $$test"; \
-		valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --error-exitcode=1 $$test; \
+	echo "VALGRIND $$test"; \
+	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --error-exitcode=1 $$test; \
 	done
 
 # Run tests with memory checker
 test-memcheck: debug
 	@for test in $(TEST_BINS); do \
 		echo "MEMCHECK $$test"; \
-		valgrind --tool=memcheck --leak-check=full --show-reachable=yes $$test; \
+	valgrind --tool=memcheck --leak-check=full --show-reachable=yes $$test; \
 	done
 
 # Generate test coverage
