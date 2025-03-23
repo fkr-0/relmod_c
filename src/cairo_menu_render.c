@@ -1,13 +1,17 @@
-/* cairo_menu_render.c - Cairo menu rendering implementation */
 #include "cairo_menu_render.h"
 #include <cairo/cairo-xcb.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef MENU_DEBUG
+#define LOG_PREFIX "[CAIRO_MENU_RENDER]"
+#include "log.h"
+#endif
 
 /* Create menu window */
 static xcb_window_t create_window(xcb_connection_t *conn, xcb_window_t parent,
                                   int width, int height) {
+  LOG("Creating window");
   xcb_screen_t *screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
 
   uint32_t values[3];
@@ -25,6 +29,7 @@ static xcb_window_t create_window(xcb_connection_t *conn, xcb_window_t parent,
                     XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual, mask,
                     values);
 
+  LOG("Created window: %u", window);
   return window;
 }
 
@@ -32,13 +37,15 @@ static xcb_window_t create_window(xcb_connection_t *conn, xcb_window_t parent,
 bool cairo_menu_render_init(CairoMenuData *data, xcb_connection_t *conn,
                             xcb_window_t parent, xcb_visualtype_t *visual) {
   CairoMenuRenderData *render = &data->render;
+  LOG("Initializing rendering");
 
   /* Create initial window */
-  render->width = 200; /* Default size */
-  render->height = 300;
+  render->width = 800; /* Default size */
+  render->height = 600;
   render->window = create_window(conn, parent, render->width, render->height);
 
   if (render->window == XCB_NONE) {
+    printf("Failed to create window\n");
     return false;
   }
 
@@ -46,7 +53,10 @@ bool cairo_menu_render_init(CairoMenuData *data, xcb_connection_t *conn,
   render->surface = cairo_xcb_surface_create(conn, render->window, visual,
                                              render->width, render->height);
 
+  LOG("(conn %p)|Created window %u, surface: %p, status=%d", conn,
+      render->window, render->surface, cairo_surface_status(render->surface));
   if (cairo_surface_status(render->surface) != CAIRO_STATUS_SUCCESS) {
+    printf("Failed to create Cairo surface\n");
     xcb_destroy_window(conn, render->window);
     render->window = XCB_NONE; // Set to XCB_NONE after destruction
     return false;
@@ -55,6 +65,7 @@ bool cairo_menu_render_init(CairoMenuData *data, xcb_connection_t *conn,
   /* Create Cairo context */
   render->cr = cairo_create(render->surface);
   if (cairo_status(render->cr) != CAIRO_STATUS_SUCCESS) {
+    printf("Failed to create Cairo context\n");
     cairo_surface_destroy(render->surface);
     xcb_destroy_window(conn, render->window);
     render->window = XCB_NONE; // Set to XCB_NONE after destruction
@@ -62,11 +73,18 @@ bool cairo_menu_render_init(CairoMenuData *data, xcb_connection_t *conn,
   }
 
   render->needs_redraw = true;
+  // Usage from here:
+  /* cairo_set_source_rgb(render->cr, 1.0, 1.0, 1.0); */
+  /* cairo_paint(render->cr); */
+  /* cairo_surface_flush(render->surface); */
+
+  LOG("Rendering initialized successfully\n");
   return true;
 }
 
 /* Cleanup rendering resources */
 void cairo_menu_render_cleanup(CairoMenuData *data) {
+  LOG("Cleaning up rendering resources");
   CairoMenuRenderData *render = &data->render;
 
   if (render->cr) {
@@ -107,11 +125,47 @@ void cairo_menu_render_cleanup(CairoMenuData *data) {
 }
 
 /* Window management */
-void cairo_menu_render_show(CairoMenuData *data) {
-  xcb_map_window(data->conn, data->render.window);
-  xcb_flush(data->conn);
-}
+/* void cairo_menu_render_show(CairoMenuData *data) { */
+/*   xcb_map_window(data->conn, data->render.window); */
+/*   xcb_flush(data->conn); */
+/* } */
 
+void cairo_menu_render_show(CairoMenuData *data) {
+  if (!data) {
+    fprintf(stderr, "Error: cairo_menu_render_show called with NULL data\n");
+    return;
+  }
+
+  LOG("Showing menu window (conn=%p, window=%u)", data->conn,
+      data->render.window);
+  // Verify XCB connection and window validity
+  if (!data->conn || data->render.window == XCB_NONE) {
+    fprintf(stderr,
+            "Error: Invalid XCB connection or window (conn=%p, window=%u)\n",
+            data->conn, data->render.window);
+    return;
+  }
+
+  // Map the window to make it visible
+  xcb_map_window(data->conn, data->render.window);
+
+  // Force XCB to flush the request to X server immediately
+  xcb_flush(data->conn);
+  LOG("Menu window shown");
+
+  // Request initial redraw explicitly
+  cairo_menu_render_request_update(data);
+
+  // Immediately render once
+  if (cairo_menu_render_needs_update(data)) {
+    cairo_menu_render_begin(data);
+    cairo_menu_render_clear(data, &data->menu->config.style);
+    cairo_menu_render_title(data, data->menu->config.title,
+                            &data->menu->config.style);
+    cairo_menu_render_items(data, data->menu);
+    cairo_menu_render_end(data);
+  }
+}
 void cairo_menu_render_hide(CairoMenuData *data) {
   xcb_unmap_window(data->conn, data->render.window);
   xcb_flush(data->conn);
@@ -140,16 +194,19 @@ void cairo_menu_render_resize(CairoMenuData *data, int width, int height) {
 
 /* Rendering operations */
 void cairo_menu_render_begin(CairoMenuData *data) {
+  printf("Rendering begin\n");
   cairo_save(data->render.cr);
 }
 
 void cairo_menu_render_end(CairoMenuData *data) {
+  printf("Rendering end\n");
   cairo_restore(data->render.cr);
   cairo_surface_flush(data->render.surface);
   xcb_flush(data->conn);
 }
 
 void cairo_menu_render_clear(CairoMenuData *data, const MenuStyle *style) {
+  printf("Rendering clear\n");
   cairo_t *cr = data->render.cr;
 
   cairo_set_source_rgba(cr, style->background_color[0],
@@ -161,6 +218,7 @@ void cairo_menu_render_clear(CairoMenuData *data, const MenuStyle *style) {
 /* Menu content rendering */
 void cairo_menu_render_title(CairoMenuData *data, const char *title,
                              const MenuStyle *style) {
+  printf("Rendering title: %s\n", title);
   cairo_t *cr = data->render.cr;
 
   cairo_set_source_rgba(cr, style->text_color[0], style->text_color[1],
@@ -173,6 +231,7 @@ void cairo_menu_render_title(CairoMenuData *data, const char *title,
 void cairo_menu_render_item(CairoMenuData *data, const MenuItem *item,
                             const MenuStyle *style, bool is_selected,
                             double y_position) {
+  printf("Rendering item: %s\n", item->label);
   cairo_t *cr = data->render.cr;
 
   /* Draw selection highlight */
@@ -194,6 +253,7 @@ void cairo_menu_render_item(CairoMenuData *data, const MenuItem *item,
 }
 
 void cairo_menu_render_items(CairoMenuData *data, const Menu *menu) {
+  printf("Rendering items\n");
   const MenuStyle *style = &menu->config.style;
   double y = style->padding * 2 + style->font_size;
 

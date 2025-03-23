@@ -2,17 +2,13 @@
 #ifndef MENU_MANAGER_H
 #define MENU_MANAGER_H
 
+#include "cairo_menu.h"
 #include "menu.h"
+#include "x11_focus.h"
 #include <stdbool.h>
 #include <sys/time.h>
 #include <xcb/xcb.h>
 #include <xcb/xcb_ewmh.h>
-
-#ifdef MENU_DEBUG
-#define LOG(fmt, ...) fprintf(stderr, "[MANAGER] " fmt "\n", ##__VA_ARGS__)
-#else
-#define LOG(fmt, ...) ((void)0)
-#endif
 
 /* Forward declaration */
 typedef struct MenuManager MenuManager;
@@ -28,8 +24,12 @@ struct MenuManager {
 };
 
 /* Core API */
-MenuManager *menu_manager_create(xcb_connection_t *conn,
-                                 xcb_ewmh_connection_t *ewmh);
+MenuManager *menu_manager_create();
+MenuManager *menu_manager_connect(MenuManager *mgr, xcb_connection_t *conn,
+                                  X11FocusContext *focus_ctx,
+                                  xcb_ewmh_connection_t *ewmh);
+
+bool menu_manager_is_connected(MenuManager *mgr);
 void menu_manager_destroy(MenuManager *manager);
 
 bool menu_manager_register(MenuManager *manager, Menu *menu);

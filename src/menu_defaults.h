@@ -32,6 +32,13 @@ static inline MenuStyle menu_style_default() {
                      .item_height = 24,
                      .padding = 8};
 }
+static inline ActivationState activation_state_default() {
+  return (ActivationState){.config = NULL,
+                           .mod_key = 0,
+                           .keycode = 0,
+                           .initialized = false,
+                           .menu = NULL};
+}
 
 /* Default initializer for MenuConfig */
 static inline MenuConfig menu_config_default() {
@@ -42,7 +49,8 @@ static inline MenuConfig menu_config_default() {
                       .item_count = 0,
                       .nav = navigation_config_default(),
                       .act = activation_config_default(),
-                      .style = menu_style_default()};
+                      .style = menu_style_default(),
+                      .act_state = activation_state_default()};
 }
 
 /* Optional: Default initializer for MenuItem (not always needed) */

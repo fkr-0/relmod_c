@@ -7,10 +7,12 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <xcb/xcb.h>
 
 /* Forward declarations */
 typedef struct Menu Menu;
+typedef struct MenuConfig MenuConfig;
 
 typedef struct {
   const char *id;
@@ -55,7 +57,16 @@ typedef struct {
   int padding;
 } MenuStyle;
 
+/* ActivationState struct */
 typedef struct {
+  MenuConfig *config;
+  uint16_t mod_key;
+  uint8_t keycode;
+  bool initialized;
+  Menu *menu;
+} ActivationState;
+
+struct MenuConfig {
   uint16_t mod_key;
   uint8_t trigger_key;
   const char *title;
@@ -64,7 +75,8 @@ typedef struct {
   NavigationConfig nav;
   ActivationConfig act;
   MenuStyle style;
-} MenuConfig;
+  ActivationState act_state;
+};
 
 typedef enum {
   MENU_STATE_INACTIVE,
@@ -95,6 +107,7 @@ struct Menu {
 Menu *menu_create(MenuConfig *config);
 void menu_destroy(Menu *menu);
 
+void menu_set_activation_state(MenuConfig *config, int mod_key, int keycode);
 void menu_set_focus_context(Menu *menu, X11FocusContext *ctx);
 void menu_show(Menu *menu);
 void menu_hide(Menu *menu);
@@ -109,5 +122,6 @@ MenuState menu_get_state(Menu *menu);
 void menu_set_update_interval(Menu *menu, unsigned int ms);
 void menu_set_update_callback(Menu *menu, void (*cb)(Menu *, void *));
 void menu_trigger_update(Menu *menu);
+void menu_redraw(Menu *menu);
 
 #endif

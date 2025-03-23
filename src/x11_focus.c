@@ -1,6 +1,7 @@
 /* x11_focus.c - Unchanged input handling and X11 window management */
 
 #include "x11_focus.h"
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -69,29 +70,76 @@ static void restore_previous_focus(X11FocusContext *ctx) {
   }
 }
 
+/* static bool wait_for_map_notify(xcb_connection_t *conn, xcb_window_t window,
+ */
+/*                                 int max_wait_ms) { */
+/*   xcb_flush(conn); // Ensure all pending X requests are sent immediately */
+
+/*   struct pollfd pfd; */
+/*   pfd.fd = xcb_get_file_descriptor(conn); */
+/*   pfd.events = POLLIN; */
+
+/*   int waited = 0; */
+
+/*   while (waited < max_wait_ms) { */
+/*     // Poll for events with timeout of 1 ms */
+/*     int ret = poll(&pfd, 1, 1); */
+/*     if (ret > 0 && (pfd.revents & POLLIN)) { */
+/*       xcb_generic_event_t *event; */
+/*       while ((event = xcb_poll_for_event(conn))) { */
+/*         uint8_t type = event->response_type & ~0x80; */
+/*         if (type == XCB_MAP_NOTIFY) { */
+/*           xcb_map_notify_event_t *map = (xcb_map_notify_event_t *)event; */
+/*           if (map->window == window) { */
+/*             free(event); */
+/*             return true; // Correct event received */
+/*           } */
+/*         } */
+/*         free(event); */
+/*       } */
+/*     } else if (ret < 0) { */
+/*       perror("poll failed"); */
+/*       return false; // Polling error */
+/*     } */
+
+/*     waited += 1; // increment waited by 1ms */
+/*   } */
+
+/*   // Timeout reached without receiving expected event */
+/*   return false; */
+/* } */
+
 static bool wait_for_map_notify(xcb_connection_t *conn, xcb_window_t window,
                                 int max_wait_ms) {
-  xcb_generic_event_t *event;
-  struct timespec delay = {0, 1000000}; // 1ms
+  xcb_flush(conn); // Ensure all requests sent
+
+  struct pollfd pfd = {.fd = xcb_get_file_descriptor(conn), .events = POLLIN};
+
   int waited = 0;
+  const int interval_ms = 10;
 
   while (waited < max_wait_ms) {
-    event = xcb_poll_for_event(conn);
-    if (event) {
-      if ((event->response_type & ~0x80) == XCB_MAP_NOTIFY) {
-        xcb_map_notify_event_t *map = (xcb_map_notify_event_t *)event;
-        if (map->window == window) {
-          free(event);
-          return true;
+    int ret = poll(&pfd, 1, interval_ms);
+    if (ret > 0 && (pfd.revents & POLLIN)) {
+      xcb_generic_event_t *event;
+      while ((event = xcb_poll_for_event(conn))) {
+        uint8_t type = event->response_type & ~0x80;
+        if (type == XCB_MAP_NOTIFY) {
+          xcb_map_notify_event_t *map = (xcb_map_notify_event_t *)event;
+          if (map->window == window) {
+            free(event);
+            return true; // Success
+          }
         }
+        free(event);
       }
-      free(event);
-    } else {
-      nanosleep(&delay, NULL);
-      waited++;
+    } else if (ret < 0) {
+      perror("poll failed");
+      return false; // Polling error
     }
+    waited += interval_ms;
   }
-  return false;
+  return false; // Timeout
 }
 
 static bool take_keyboard(X11FocusContext *ctx, xcb_window_t window,
@@ -142,31 +190,40 @@ static bool take_pointer(X11FocusContext *ctx, xcb_window_t window,
 bool x11_grab_inputs(X11FocusContext *ctx, xcb_window_t window) {
   store_current_focus(ctx);
 
-  xcb_map_window(ctx->conn, window);
-  xcb_flush(ctx->conn);
+  /* xcb_map_window(ctx->conn, window); */
+  /* xcb_flush(ctx->conn); */
 
   /* if (!wait_for_map_notify(ctx->conn, window, 500)) { */
-  /*   fprintf(stderr, "[X11] Timeout waiting for MapNotify on window %u\n", */
+  /*   fprintf(stderr, "[X11] Timeout waiting for MapNotify on window %u\n",
+   */
   /*           window); */
   /*   restore_previous_focus(ctx); */
   /*   return false; */
   /* } */
+  /* uint32_t values[] = {XCB_EVENT_MASK_STRUCTURE_NOTIFY}; */
+  /* xcb_change_window_attributes(ctx->conn, window, XCB_CW_EVENT_MASK, values);
+   */
+  /* xcb_map_window(ctx->conn, window); */
 
-  if (!take_keyboard(ctx, window, 200)) {
+  /* if (!wait_for_map_notify(ctx->conn, window, 1000)) { */
+  /*   fprintf(stderr, "MapNotify event timeout"); */
+  /* } */
+
+  xcb_set_input_focus(ctx->conn, XCB_INPUT_FOCUS_POINTER_ROOT, window,
+                      XCB_CURRENT_TIME);
+  if (!take_keyboard(ctx, window, 500)) {
     fprintf(stderr, "[X11] Keyboard grab failed\n");
     restore_previous_focus(ctx);
     return false;
   }
 
-  if (!take_pointer(ctx, window, 100)) {
+  if (!take_pointer(ctx, window, 500)) {
     fprintf(stderr, "[X11] Pointer grab failed\n");
     xcb_ungrab_keyboard(ctx->conn, XCB_CURRENT_TIME);
     restore_previous_focus(ctx);
     return false;
   }
 
-  xcb_set_input_focus(ctx->conn, XCB_INPUT_FOCUS_POINTER_ROOT, window,
-                      XCB_CURRENT_TIME);
   xcb_flush(ctx->conn);
   return true;
 }

@@ -8,15 +8,20 @@
 #include <string.h>
 #include <sys/time.h>
 
+#ifdef MENU_DEBUG
+#define LOG_PREFIX "[CAIRO_MENU]"
+#include "log.h"
+#endif
 /* Forward declarations */
 static void cairo_menu_cleanup(void *user_data);
 static void cairo_menu_update(Menu *menu, void *user_data);
 static bool cairo_menu_handle_expose(Menu *menu, void *user_data);
-static xcb_visualtype_t *get_root_visual_type(xcb_connection_t *conn);
+static xcb_visualtype_t *get_root_visual_type(xcb_screen_t *screen);
 
 /* Create Cairo-rendered menu */
 Menu *cairo_menu_create(xcb_connection_t *conn, xcb_window_t parent,
-                        const MenuConfig *config) {
+                        xcb_screen_t *screen, const MenuConfig *config) {
+  LOG("Creating menu %s", config->title);
   if (!conn || !config) {
     fprintf(stderr, "Invalid connection or configuration\n");
     fprintf(stderr, "Connection: %p, Config: %p\n", conn, config);
@@ -29,7 +34,7 @@ Menu *cairo_menu_create(xcb_connection_t *conn, xcb_window_t parent,
     fprintf(stderr, "Failed to create menu\n");
     return NULL;
   }
-  printf("Menu created successfully\n");
+  LOG("Menu created successfully\n");
 
   /* Create Cairo data */
   CairoMenuData *data = calloc(1, sizeof(CairoMenuData));
@@ -38,17 +43,17 @@ Menu *cairo_menu_create(xcb_connection_t *conn, xcb_window_t parent,
     menu_destroy(menu);
     return NULL;
   }
-  printf("CairoMenuData allocated successfully\n");
+  LOG("CairoMenuData allocated successfully\n");
 
   /* Get visual type for Cairo */
-  xcb_visualtype_t *visual = get_root_visual_type(conn);
+  xcb_visualtype_t *visual = get_root_visual_type(screen);
   if (!visual) {
     fprintf(stderr, "Failed to get visual type\n");
     free(data);
     menu_destroy(menu);
     return NULL;
   }
-  printf("Visual type retrieved successfully\n");
+  LOG("Visual type retrieved successfully\n");
 
   /* Initialize rendering */
   if (!cairo_menu_render_init(data, conn, parent, visual)) {
@@ -57,18 +62,40 @@ Menu *cairo_menu_create(xcb_connection_t *conn, xcb_window_t parent,
     menu_destroy(menu);
     return NULL;
   }
-  printf("Rendering initialized successfully\n");
+  data->conn = conn;
+  /* data->render.window = parent; */
+  data->menu = menu;
+  LOG("Rendering initialized successfully\n");
 
   /* Initialize animations */
-  cairo_menu_animation_init(data);
-  printf("Animations initialized successfully\n");
+  /* cairo_menu_animation_init(data); */
+  /* LOG("Animations initialized successfully\n"); */
+  /* cairo_menu_animation_set_default(data, MENU_ANIM_FADE, MENU_ANIM_FADE,
+   * 200.0); */
+
+  /* cairo_menu_animation_set_sequence(data, true, NULL); */
+  /* data->anim.show_animation = menu_animation_fade_in(200); /\* 200ms fade in
+   */
+  /*                                                           *\/ */
+  /* cairo_menu_animation_show(data, menu); */
+  /* double duration = 200.0; */
+
+  /* while (duration > 0.0) { */
+  /*   cairo_menu_animation_update(data, menu, duration); */
+  /*   /\* cairo_menu_animation_show(data, menu); *\/ */
+  /*   duration -= 10.0; */
+  /* } */
 
   /* Set up menu callbacks */
   menu->cleanup_cb = cairo_menu_cleanup;
   menu->update_cb = cairo_menu_update;
   menu->user_data = data;
-
-  data->menu = menu;
+  // retrieve render like
+  // cairo_surface_t *surface = ((CairoMenuData
+  // *)menu->user_data)->render.surface; or window: xcb_window_t window =
+  // ((CairoMenuData *)menu->user_data)->render.window;
+  /* data->menu = menu; */
+  /* data->anim.last_frame.tv_sec = 0; */
 
   return menu;
 }
@@ -120,8 +147,9 @@ static bool cairo_menu_handle_expose(Menu *menu, void *user_data) {
 }
 
 /* Get visual type for Cairo */
-static xcb_visualtype_t *get_root_visual_type(xcb_connection_t *conn) {
-  xcb_screen_t *screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
+static xcb_visualtype_t *get_root_visual_type(xcb_screen_t *screen) {
+  /* xcb_screen_t *screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
+   */
   xcb_depth_iterator_t depth_iter = xcb_screen_allowed_depths_iterator(screen);
 
   for (; depth_iter.rem; xcb_depth_next(&depth_iter)) {
@@ -170,7 +198,8 @@ void cairo_menu_activate(Menu *menu) {
   CairoMenuData *data = menu->user_data;
 
   cairo_menu_animation_show(data, menu);
-  printf("Menu activated.\n");
+
+  LOG("Menu activated.\n");
 }
 
 /* Log menu deactivation */
@@ -180,7 +209,7 @@ void cairo_menu_deactivate(Menu *menu) {
   CairoMenuData *data = menu->user_data;
 
   cairo_menu_animation_hide(data, menu);
-  printf("Menu deactivated.\n");
+  LOG("Menu deactivated.\n");
 }
 
 Menu *cairo_menu_init(const MenuConfig *config) {
@@ -196,4 +225,25 @@ Menu *cairo_menu_init(const MenuConfig *config) {
   menu->config = *config;
 
   return menu;
+}
+
+void cairo_menu_show(Menu *menu) {
+  if (!menu || menu->active)
+    return;
+  menu->active = true;
+  /* menu->state = MENU_STATE_ACTIVATING; */
+  cairo_menu_update(menu, menu->user_data);
+
+  /* double duration = 200.0; */
+  /* for (size_t i = 0; i < 1000; i++) { */
+  /*   if (menu->update_interval > 0 && menu->update_cb) */
+  /*     menu_trigger_update(menu); */
+  /* } */
+  /* /\* while (duration > 0.0) { *\/ */
+  /* cairo_menu_animation_update(NULL, menu, duration); */
+  /*   duration -= 10.0; */
+  /* } */
+  /* while (menu->state == MENU_STATE_INITIALIZING) { */
+  /* cairo_menu_update(menu, menu->user_data); */
+  /* } */
 }

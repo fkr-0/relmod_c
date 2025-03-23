@@ -1,10 +1,18 @@
 /* menu_manager.c - Menu management implementation */
 #include "menu_manager.h"
+#include "cairo_menu.h"
+#include "cairo_menu_animation.h"
+#include "cairo_menu_render.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
 #include <unistd.h>
+
+#ifdef MENU_DEBUG
+#define LOG_PREFIX "[MANAGER]"
+#include "log.h"
+#endif
 
 /* Registry entry */
 typedef struct MenuRegistryEntry {
@@ -40,6 +48,20 @@ static Menu *registry_find_by_id(MenuRegistryEntry *entry, const char *id) {
   return NULL;
 }
 
+/* Registry iteration
+ * Calls the given function for each registered menu
+ * Stops iteration if the callback returns false.
+ * Usage:
+ * menu_manager_foreach(manager, callback_fn, user_data);
+ * Example callback_fn:
+ * bool callback_fn(Menu *menu, struct timeval *last_update, void *user_data) {
+ *  // Do something with menu, e.g. match ev->state + ev->detail
+ * if (menu->mod_key == ev->state && menu->trigger_key == ev->detail) {
+ *   menu_manager_activate(manager, menu);
+ *   return false; // Stop iteration
+ * }
+ * return true; // Continue iteration
+ * */
 void menu_manager_foreach(MenuManager *mgr, MenuManagerForEachFn fn,
                           void *user_data) {
   if (!mgr || !fn)
@@ -53,16 +75,27 @@ void menu_manager_foreach(MenuManager *mgr, MenuManagerForEachFn fn,
   }
 }
 
-MenuManager *menu_manager_create(xcb_connection_t *conn,
-                                 xcb_ewmh_connection_t *ewmh) {
-  if (!conn || !ewmh)
-    return NULL;
+MenuManager *menu_manager_create() {
   MenuManager *mgr = calloc(1, sizeof(MenuManager));
   if (!mgr)
     return NULL;
+  return mgr;
+}
+
+bool menu_manager_is_connected(MenuManager *mgr) {
+  return mgr && mgr->conn && mgr->ewmh && mgr->focus_ctx;
+}
+
+MenuManager *menu_manager_connect(MenuManager *mgr, xcb_connection_t *conn,
+                                  X11FocusContext *focus_ctx,
+                                  xcb_ewmh_connection_t *ewmh) {
+  if (!conn || !ewmh || !mgr) {
+    fprintf(stderr, "Connecting MenuManager failed\n");
+    return NULL;
+  }
   mgr->conn = conn;
   mgr->ewmh = ewmh;
-  mgr->focus_ctx = x11_focus_init(conn, ewmh);
+  mgr->focus_ctx = focus_ctx;
   return mgr;
 }
 
@@ -79,19 +112,23 @@ bool menu_manager_register(MenuManager *mgr, Menu *menu) {
   if (!mgr || !menu)
     return false;
   MenuRegistryEntry *head = (MenuRegistryEntry *)mgr->registry;
-  if (registry_find(head, menu))
+  if (registry_find(head, menu)) {
+    LOG("Menu already registered: [%s]", menu->config.title);
     return false;
+  }
 
   MenuRegistryEntry *entry = calloc(1, sizeof(MenuRegistryEntry));
-  if (!entry)
+  if (!entry) {
+    LOG("Failed to allocate MenuRegistryEntry\n");
     return false;
+  }
 
   entry->menu = menu;
   gettimeofday(&entry->last_update, NULL);
   entry->next = head;
   mgr->registry = entry;
   mgr->menu_count++;
-  LOG("Registered menu: %s", menu->config.title);
+  LOG("Registered menu: [%s]", menu->config.title);
   return true;
 }
 
@@ -117,10 +154,16 @@ void menu_manager_unregister(MenuManager *mgr, Menu *menu) {
 
 bool menu_manager_handle_key_press(MenuManager *mgr,
                                    xcb_key_press_event_t *event) {
-  if (!mgr || !event)
-    return false;
-  if (mgr->active_menu)
+  if (!mgr || !event) {
+    LOG("Menu manager MGR or EVENT is null\n");
+    return true;
+  }
+  if (mgr->active_menu) {
+    LOG("Passing event to active menu %s", mgr->active_menu->config.title);
     return menu_handle_key_press(mgr->active_menu, event);
+  } else {
+    LOG("No active menu, checking registry\n");
+  }
 
   MenuRegistryEntry *entry = (MenuRegistryEntry *)mgr->registry;
   while (entry) {
@@ -144,6 +187,7 @@ bool menu_manager_handle_key_release(MenuManager *mgr,
                                      xcb_key_release_event_t *event) {
   if (!mgr || !event)
     return false;
+  LOG("Key release %d %d %p", event->detail, event->state, mgr->active_menu);
   if (mgr->active_menu && !menu_handle_key_release(mgr->active_menu, event)) {
     menu_manager_deactivate(mgr);
     return true;
@@ -152,16 +196,21 @@ bool menu_manager_handle_key_release(MenuManager *mgr,
 }
 bool menu_manager_activate(MenuManager *mgr, Menu *menu) {
   if (!mgr || !menu)
-    return false;
+    return true;
 
   if (!registry_find((MenuRegistryEntry *)mgr->registry, menu)) {
-    fprintf(stderr, "Menu not registered\n");
-    return false;
+    fprintf(stderr, "Menu %s not registered\n", menu->config.title);
+    return true;
   }
 
+  LOG("Activating menu: %s", menu->config.title);
   // Deactivate any existing active menu
-  if (mgr->active_menu)
+  if (mgr->active_menu && mgr->active_menu != menu) {
+    LOG("Deactivating existing active menu: %s",
+        mgr->active_menu->config.title);
     menu_manager_deactivate(mgr);
+  }
+  mgr->active_menu = menu;
 
   // Inject the X11FocusContext before showing the menu
   menu_set_focus_context(menu, mgr->focus_ctx);
@@ -169,12 +218,21 @@ bool menu_manager_activate(MenuManager *mgr, Menu *menu) {
   // Update timer reference
   MenuRegistryEntry *entry =
       registry_find((MenuRegistryEntry *)mgr->registry, menu);
-  if (entry)
+  if (entry) {
+    LOG("Updating last update time for menu: %s", menu->config.title);
     gettimeofday(&entry->last_update, NULL);
-
+  } else {
+    LOG("Failed to update last update time for menu: %s", menu->config.title);
+  }
+  LOG("Activating->Showing menu: %s", menu->config.title);
   menu_show(menu);
-  mgr->active_menu = menu;
-  return true;
+  LOG("Activated menu: %s", menu->config.title);
+  /* cairo_menu_activate(menu); */
+  /* cairo_menu_show(menu->user_data); */
+  /* cairo_menu_render_show(menu->user_data); */
+  /* cairo_menu_animation_show(menu->user_data); */
+
+  return false;
 }
 
 void menu_manager_deactivate(MenuManager *mgr) {
@@ -182,6 +240,7 @@ void menu_manager_deactivate(MenuManager *mgr) {
     return;
   LOG("Deactivated menu: %s", mgr->active_menu->config.title);
   menu_hide(mgr->active_menu);
+  cairo_menu_deactivate(mgr->active_menu);
   mgr->active_menu = NULL;
 }
 

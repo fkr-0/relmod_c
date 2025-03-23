@@ -142,8 +142,10 @@ static void test_menu_workflow(void) {
       .act = {.activate_on_mod_release = true, .activate_on_direct_key = true}};
 
   Menu *menu = cairo_menu_create(mock.conn, mock.root, &config);
+  menu_set_activation_state(menu, SUPER_MASK, 31);
+  input_handler_add_menu(handler, menu);
   assert(menu != NULL);
-  assert(menu_manager_register(handler->menu_manager, menu));
+  /* assert(menu_manager_register(handler->menu_manager, menu)); */
 
   /* Test workflow: Activate -> Navigate -> Select -> Deactivate */
   int state = 0;
@@ -210,13 +212,17 @@ static void test_menu_switching(void) {
   Menu *menu1 = cairo_menu_create(mock.conn, mock.root, &config1);
   Menu *menu2 = cairo_menu_create(mock.conn, mock.root, &config2);
 
-  assert(menu_manager_register(handler->menu_manager, menu1));
-  assert(menu_manager_register(handler->menu_manager, menu2));
+  menu_set_activation_state(menu1, SUPER_MASK, 31);
+  menu_set_activation_state(menu2, SUPER_MASK, 32);
+  /* assert(menu_manager_register(handler->menu_manager, menu1)); */
+  /* assert(menu_manager_register(handler->menu_manager, menu2)); */
 
+  input_handler_add_menu(handler, menu1);
+  input_handler_add_menu(handler, menu2);
   /* Test switching between menus */
 
   /* Activate first menu */
-  simulate_key_press(handler, XCB_MOD_MASK_4, 0);  /* Super down */
+  simulate_key_press(handler, SUPER_KEY, 0);       /* Super down */
   simulate_key_press(handler, 31, XCB_MOD_MASK_4); /* i press */
   assert(menu_manager_get_active(handler->menu_manager) == menu1);
 
@@ -225,8 +231,10 @@ static void test_menu_switching(void) {
   simulate_key_press(handler, 32, XCB_MOD_MASK_4);   /* o press */
   assert(menu_manager_get_active(handler->menu_manager) == menu2);
 
+  fprintf(stderr, "Active menu: %s\n",
+          menu_manager_get_active(handler->menu_manager));
   /* Deactivate */
-  simulate_key_release(handler, XCB_MOD_MASK_4, 0); /* Super up */
+  simulate_key_release(handler, SUPER_KEY, 0); /* Super up */
   assert(menu_manager_get_active(handler->menu_manager) == NULL);
 
   /* Clean up */
