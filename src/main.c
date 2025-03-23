@@ -47,6 +47,10 @@ int main(void) {
 
   MenuConfig *config = create_menu_config();
 
+  // log menu style
+  printf("Menu style: background_color: %f, %f, %f, %f\n",
+         config->style.background_color[0], config->style.background_color[1],
+         config->style.background_color[2], config->style.background_color[3]);
   // Crucial fix: Only register CONFIG, NOT menu itself
   input_handler_add_menu(handler, config);
 
@@ -55,7 +59,7 @@ int main(void) {
 
   // Cleanup (after exit)
   menu_config_destroy(config);
-  input_handler_destroy(handler);
+  /* input_handler_destroy(handler); */
   xcb_disconnect(conn);
   return EXIT_SUCCESS;
 }

@@ -22,6 +22,7 @@ static xcb_atom_t get_atom(xcb_connection_t *conn, const char *name) {
 
 X11FocusContext *x11_focus_init(xcb_connection_t *conn,
                                 xcb_ewmh_connection_t *ewmh) {
+
   X11FocusContext *ctx = calloc(1, sizeof(X11FocusContext));
   ctx->conn = conn;
   ctx->ewmh = ewmh;
@@ -35,10 +36,13 @@ void x11_focus_cleanup(X11FocusContext *ctx) {
 }
 
 void x11_set_window_floating(X11FocusContext *ctx, xcb_window_t window) {
-  xcb_atom_t dialog = ctx->ewmh->_NET_WM_WINDOW_TYPE_DIALOG;
-  xcb_change_property(ctx->conn, XCB_PROP_MODE_REPLACE, window,
-                      ctx->ewmh->_NET_WM_WINDOW_TYPE, XCB_ATOM_ATOM, 32, 1,
-                      &dialog);
+  xcb_ewmh_connection_t ewmh = *ctx->ewmh;
+  xcb_atom_t wm_window_type = ewmh._NET_WM_WINDOW_TYPE;
+  xcb_atom_t wm_window_type_dialog = ewmh._NET_WM_WINDOW_TYPE_DIALOG;
+
+  /* xcb_atom_t dialog = ctx->ewmh->_NET_WM_WINDOW_TYPE_DIALOG; */
+  xcb_change_property(ctx->conn, XCB_PROP_MODE_REPLACE, window, wm_window_type,
+                      XCB_ATOM_ATOM, 32, 1, &wm_window_type_dialog);
 
   struct {
     uint32_t flags, functions, decorations;
@@ -209,8 +213,6 @@ bool x11_grab_inputs(X11FocusContext *ctx, xcb_window_t window) {
   /*   fprintf(stderr, "MapNotify event timeout"); */
   /* } */
 
-  xcb_set_input_focus(ctx->conn, XCB_INPUT_FOCUS_POINTER_ROOT, window,
-                      XCB_CURRENT_TIME);
   if (!take_keyboard(ctx, window, 500)) {
     fprintf(stderr, "[X11] Keyboard grab failed\n");
     restore_previous_focus(ctx);
@@ -223,6 +225,8 @@ bool x11_grab_inputs(X11FocusContext *ctx, xcb_window_t window) {
     restore_previous_focus(ctx);
     return false;
   }
+  xcb_set_input_focus(ctx->conn, XCB_INPUT_FOCUS_POINTER_ROOT, window,
+                      XCB_CURRENT_TIME);
 
   xcb_flush(ctx->conn);
   return true;

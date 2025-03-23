@@ -188,10 +188,11 @@ bool menu_manager_handle_key_release(MenuManager *mgr,
   if (!mgr || !event)
     return false;
   LOG("Key release %d %d %p", event->detail, event->state, mgr->active_menu);
-  if (mgr->active_menu && !menu_handle_key_release(mgr->active_menu, event)) {
-    menu_manager_deactivate(mgr);
-    return true;
-  }
+  /* if (mgr->active_menu && !menu_handle_key_release(mgr->active_menu, event))
+   * { */
+  /*   menu_manager_deactivate(mgr); */
+  /*   return true; */
+  /* } */
   return false;
 }
 bool menu_manager_activate(MenuManager *mgr, Menu *menu) {

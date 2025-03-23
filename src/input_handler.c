@@ -34,11 +34,14 @@ void input_handler_setup_x(InputHandler *handler) {
 
   xcb_connection_t *conn = xcb_connect(NULL, NULL);
   if (xcb_connection_has_error(conn)) {
+    free(handler);
     LOG("[ERROR] Failed to connect to X server");
     return;
   }
   LOG("[XCB] Connected to X server");
 
+  xcb_screen_t *screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
+  xcb_window_t root = screen->root;
   xcb_ewmh_connection_t ewmh = {0};
   xcb_intern_atom_cookie_t *cookie = xcb_ewmh_init_atoms(conn, &ewmh);
   if (!xcb_ewmh_init_atoms_replies(&ewmh, cookie, NULL)) {
@@ -47,9 +50,6 @@ void input_handler_setup_x(InputHandler *handler) {
     return;
   }
   LOG("[XCB] EWMH initialized");
-
-  xcb_screen_t *screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
-  xcb_window_t root = screen->root;
 
   LOG("[INIT-X] Connecting input handler");
   if (!handler) {
@@ -66,6 +66,7 @@ void input_handler_setup_x(InputHandler *handler) {
   handler->root = &root; // Set root root
   handler->modifier_mask = 0;
   handler->focus_ctx = x11_focus_init(conn, &ewmh);
+  handler->ewmh = &ewmh;
 
   if (!handler->focus_ctx)
     goto fail;
@@ -198,6 +199,14 @@ bool input_handler_handle_event(InputHandler *handler,
 
     LOG("[IH-PRESS] PASS event TO MENU MANAGER");
     return menu_manager_handle_key_press(handler->menu_manager, kp);
+  }
+
+  case XCB_FOCUS_IN: {
+    xcb_focus_in_event_t *focus_event = (xcb_focus_in_event_t *)event;
+    LOG("[IH-FOCUS] Focus in event: %d", focus_event->event);
+    /* fprintf(stderr, "Focus changed to window: %d\n", window); */
+
+    return false;
   }
   case XCB_KEY_RELEASE: {
     xcb_key_release_event_t *kr = (xcb_key_release_event_t *)event;
@@ -355,8 +364,9 @@ bool input_handler_handle_activation(InputHandler *handler, uint16_t mod_key,
       /*                                 state->config); */
 
       if (!state->menu || !state->menu->user_data) {
-        state->menu = cairo_menu_create(handler->conn, *handler->root,
-                                        handler->screen, state->config);
+        state->menu =
+            cairo_menu_create(handler->conn, *handler->root, handler->focus_ctx,
+                              handler->screen, state->config);
       }
       LOG("Menu activating: %p", state->menu);
       if (!state->menu || !state->menu->user_data) {

@@ -24,9 +24,9 @@ static inline NavigationConfig navigation_config_default() {
 
 /* Default initializer for MenuStyle */
 static inline MenuStyle menu_style_default() {
-  return (MenuStyle){.background_color = {0.0, 0.0, 0.0, 0.8},
-                     .text_color = {1.0, 1.0, 1.0, 1.0},
-                     .highlight_color = {0.2, 0.6, 1.0, 1.0},
+  return (MenuStyle){.background_color = {0.0, 0.0, 0.0, 0.5}, // RGBA
+                     .text_color = {0.2, 0.2, 1.0, 1.0},       // White
+                     .highlight_color = {0.2, 0.6, 1.0, 1.0},  // Blue
                      .font_face = "Sans",
                      .font_size = 14.0,
                      .item_height = 24,

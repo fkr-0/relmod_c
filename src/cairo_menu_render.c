@@ -10,39 +10,57 @@
 
 /* Create menu window */
 static xcb_window_t create_window(xcb_connection_t *conn, xcb_window_t parent,
+                                  X11FocusContext *ctx, xcb_screen_t *screen,
                                   int width, int height) {
-  LOG("Creating window");
-  xcb_screen_t *screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
-
-  uint32_t values[3];
-  uint32_t mask =
-      XCB_CW_BACK_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK;
-
-  values[0] = screen->black_pixel;
-  values[1] = 1; /* Override redirect */
-  values[2] = XCB_EVENT_MASK_EXPOSURE;
 
   xcb_window_t window = xcb_generate_id(conn);
-  xcb_create_window(conn, XCB_COPY_FROM_PARENT, window, parent, 0, 0, /* x, y */
-                    width, height, /* width, height */
-                    0,             /* border width */
-                    XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual, mask,
-                    values);
+  printf("Window ID: %d\n", window);
+  uint32_t value_list[] = {screen->black_pixel,
+                           XCB_EVENT_MASK_KEY_PRESS |
+                               XCB_EVENT_MASK_FOCUS_CHANGE};
+  xcb_create_window(conn, XCB_COPY_FROM_PARENT, window, screen->root, 0, 0, 800,
+                    100, 1, XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual,
+                    XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK, value_list);
+  x11_set_window_floating(ctx, window);
+
+  LOG("Creating window");
+  /* xcb_screen_t *screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
+   */
+
+  /* uint32_t values[3]; */
+  /* uint32_t mask = */
+  /*     XCB_CW_BACK_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK; */
+
+  /* values[0] = screen->black_pixel; */
+  /* values[1] = 1; /\* Override redirect *\/ */
+  /* values[2] = XCB_EVENT_MASK_EXPOSURE; */
+
+  /* xcb_window_t window = xcb_generate_id(conn); */
+  /* xcb_create_window(conn, XCB_COPY_FROM_PARENT, window, parent, 0, 0, /\* x,
+   * y *\/ */
+  /*                   width, height, /\* width, height *\/ */
+  /*                   0,             /\* border width *\/ */
+  /*                   XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual, mask,
+   */
+  /*                   values); */
 
   LOG("Created window: %u", window);
   return window;
 }
 
 /* Initialize rendering */
+
 bool cairo_menu_render_init(CairoMenuData *data, xcb_connection_t *conn,
-                            xcb_window_t parent, xcb_visualtype_t *visual) {
+                            xcb_screen_t *screen, xcb_window_t parent,
+                            X11FocusContext *ctx, xcb_visualtype_t *visual) {
   CairoMenuRenderData *render = &data->render;
   LOG("Initializing rendering");
 
   /* Create initial window */
   render->width = 800; /* Default size */
   render->height = 600;
-  render->window = create_window(conn, parent, render->width, render->height);
+  render->window =
+      create_window(conn, parent, ctx, screen, render->width, render->height);
 
   if (render->window == XCB_NONE) {
     printf("Failed to create window\n");
@@ -117,7 +135,8 @@ void cairo_menu_render_cleanup(CairoMenuData *data) {
                data->conn); // Add debug print
 
       } else {
-        printf("Connection error: %d\n", connection_error); // Add debug print
+        printf("Connection error: %d\n",
+               connection_error); // Add debug print
       }
     }
     render->window = XCB_NONE; // Set to XCB_NONE after destruction
@@ -165,6 +184,9 @@ void cairo_menu_render_show(CairoMenuData *data) {
     cairo_menu_render_items(data, data->menu);
     cairo_menu_render_end(data);
   }
+  xcb_configure_window(data->conn, data->render.window,
+                       XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y,
+                       (const uint32_t[]){0, 0});
 }
 void cairo_menu_render_hide(CairoMenuData *data) {
   xcb_unmap_window(data->conn, data->render.window);
@@ -326,7 +348,7 @@ void cairo_menu_render_scale(CairoMenuData *data, double sx, double sy) {
 void cairo_menu_render_set_opacity(CairoMenuData *data, double opacity) {
   cairo_push_group(data->render.cr);
   cairo_pop_group_to_source(data->render.cr);
-  cairo_paint_with_alpha(data->render.cr, opacity);
+  cairo_paint_with_alpha(data->render.cr, 1.0); // opacity);
 }
 
 /* Color operations */

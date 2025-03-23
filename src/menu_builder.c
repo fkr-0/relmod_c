@@ -81,6 +81,7 @@ MenuConfig *menu_builder_finalize(MenuBuilder *builder) {
   config->act_state.initialized = false;
   config->act_state.mod_key = builder->config.mod_key;
   config->act_state.keycode = builder->config.trigger_key;
+  config->style = menu_style_default();
 
   return config;
 }

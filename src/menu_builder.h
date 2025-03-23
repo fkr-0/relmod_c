@@ -3,6 +3,7 @@
 #define MENU_BUILDER_H
 
 #include "menu.h"
+#include "menu_defaults.h"
 #include <stdbool.h>
 #include <stddef.h>
 

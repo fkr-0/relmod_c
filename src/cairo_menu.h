@@ -4,12 +4,14 @@
 #define CAIRO_MENU_H
 
 #include "menu.h"
+#include "x11_focus.h"
 #include <stdbool.h>
 #include <xcb/xcb.h>
 #include <xcb/xcb_ewmh.h>
 
 Menu *cairo_menu_create(xcb_connection_t *conn, xcb_window_t root,
-                        xcb_screen_t *screen, const MenuConfig *config);
+                        X11FocusContext *ctx, xcb_screen_t *screen,
+                        const MenuConfig *config);
 void cairo_menu_destroy(Menu *menu);
 void cairo_menu_show(Menu *menu);
 void cairo_menu_hide(Menu *menu);
