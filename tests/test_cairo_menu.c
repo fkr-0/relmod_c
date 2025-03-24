@@ -12,6 +12,9 @@ void test_cairo_menu_create() {
   xcb_screen_t *screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
   assert(screen);
 
+  xcb_window_t root = screen->root;
+
+  X11FocusContext ctx;
   MenuConfig config = {
       .mod_key = XCB_MOD_MASK_4,
       .trigger_key = 31,
@@ -29,7 +32,7 @@ void test_cairo_menu_create() {
                 .item_height = 20,
                 .padding = 10}};
 
-  Menu *menu = cairo_menu_create(conn, screen->root, &config);
+  Menu *menu = cairo_menu_create(conn, root, &ctx, screen, &config);
   assert(menu);
 
   menu_destroy(menu);

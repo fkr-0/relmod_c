@@ -7,40 +7,73 @@
 #define LOG_PREFIX "[CAIRO_MENU_RENDER]"
 #include "log.h"
 #endif
+// Helper: create popup window top-right
+/* static xcb_window_t create_popup(xcb_connection_t *conn, xcb_window_t root,
+ */
+/*                                  xcb_screen_t *screen, int w, int h) { */
 
+/*   int x = screen->width_in_pixels - w - 20; // Padding 20px */
+/*   int y = 20; */
+
+/*   uint32_t mask = */
+/*       XCB_CW_BACK_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK; */
+/*   uint32_t vals[3] = {0, 1, XCB_EVENT_MASK_EXPOSURE}; */
+
+/*   xcb_window_t win = xcb_generate_id(conn); */
+/*   xcb_create_window(conn, XCB_COPY_FROM_PARENT, win, root, x, y, w, h, 1, */
+/*                     XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual, mask,
+ */
+/*                     vals); */
+/*   xcb_map_window(conn, win); */
+/*   xcb_flush(conn); */
+/*   return win; */
+/* } */
 /* Create menu window */
 static xcb_window_t create_window(xcb_connection_t *conn, xcb_window_t parent,
                                   X11FocusContext *ctx, xcb_screen_t *screen,
                                   int width, int height) {
 
+  int x = screen->width_in_pixels - width - 20; // Padding 20px
+  int y = 20;
   xcb_window_t window = xcb_generate_id(conn);
   printf("Window ID: %d\n", window);
-  uint32_t value_list[] = {screen->black_pixel,
-                           XCB_EVENT_MASK_KEY_PRESS |
-                               XCB_EVENT_MASK_FOCUS_CHANGE};
-  xcb_create_window(conn, XCB_COPY_FROM_PARENT, window, screen->root, 0, 0, 800,
-                    100, 1, XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual,
-                    XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK, value_list);
+
+  uint32_t mask =
+      XCB_CW_BACK_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK;
+  uint32_t vals[3] = {0, 1, XCB_EVENT_MASK_EXPOSURE};
+
+  /* uint32_t mask = */
+  /*     XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK; */
+  /* uint32_t value_list[] = {screen->black_pixel, */
+  /*                          XCB_EVENT_MASK_KEY_PRESS | */
+  /*                              XCB_EVENT_MASK_FOCUS_CHANGE}; */
+  xcb_create_window(conn, XCB_COPY_FROM_PARENT, window, screen->root, x, y,
+                    width, height, 1, XCB_WINDOW_CLASS_INPUT_OUTPUT,
+                    screen->root_visual, mask, vals);
   x11_set_window_floating(ctx, window);
 
   LOG("Creating window");
-  /* xcb_screen_t *screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
+  /* xcb_screen_t *screen =
+xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
    */
 
   /* uint32_t values[3]; */
   /* uint32_t mask = */
-  /*     XCB_CW_BACK_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK; */
+  /*     XCB_CW_BACK_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK;
+   */
 
   /* values[0] = screen->black_pixel; */
   /* values[1] = 1; /\* Override redirect *\/ */
   /* values[2] = XCB_EVENT_MASK_EXPOSURE; */
 
   /* xcb_window_t window = xcb_generate_id(conn); */
-  /* xcb_create_window(conn, XCB_COPY_FROM_PARENT, window, parent, 0, 0, /\* x,
+  /* xcb_create_window(conn, XCB_COPY_FROM_PARENT, window, parent, 0, 0,
+/\* x,
    * y *\/ */
   /*                   width, height, /\* width, height *\/ */
   /*                   0,             /\* border width *\/ */
-  /*                   XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual, mask,
+  /*                   XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual,
+mask,
    */
   /*                   values); */
 
@@ -61,6 +94,23 @@ bool cairo_menu_render_init(CairoMenuData *data, xcb_connection_t *conn,
   render->height = 600;
   render->window =
       create_window(conn, parent, ctx, screen, render->width, render->height);
+  /* screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data; */
+  /* xcb_depth_iterator_t depth_iter =
+   * xcb_screen_allowed_depths_iterator(screen); */
+  /* visual = NULL; */
+
+  /* for (; depth_iter.rem; xcb_depth_next(&depth_iter)) { */
+  /*   xcb_visualtype_iterator_t visual_iter = */
+  /*       xcb_depth_visuals_iterator(depth_iter.data); */
+  /*   for (; visual_iter.rem; xcb_visualtype_next(&visual_iter)) { */
+  /*     if (screen->root_visual == visual_iter.data->visual_id) { */
+  /*       visual = visual_iter.data; */
+  /*       break; */
+  /*     } */
+  /*   } */
+  /*   if (visual != NULL) */
+  /*     break; */
+  /* } */
 
   if (render->window == XCB_NONE) {
     printf("Failed to create window\n");
@@ -68,11 +118,10 @@ bool cairo_menu_render_init(CairoMenuData *data, xcb_connection_t *conn,
   }
 
   /* Create Cairo surface */
+  printf("Creating Cairo surface\n");
   render->surface = cairo_xcb_surface_create(conn, render->window, visual,
                                              render->width, render->height);
-
-  LOG("(conn %p)|Created window %u, surface: %p, status=%d", conn,
-      render->window, render->surface, cairo_surface_status(render->surface));
+  printf("Cairo surface created: %p, status=%d\n", render->surface, cairo_surface_status(render->surface));
   if (cairo_surface_status(render->surface) != CAIRO_STATUS_SUCCESS) {
     printf("Failed to create Cairo surface\n");
     xcb_destroy_window(conn, render->window);
@@ -81,7 +130,9 @@ bool cairo_menu_render_init(CairoMenuData *data, xcb_connection_t *conn,
   }
 
   /* Create Cairo context */
+  printf("Creating Cairo context\n");
   render->cr = cairo_create(render->surface);
+  printf("Cairo context created: %p, status=%d\n", render->cr, cairo_status(render->cr));
   if (cairo_status(render->cr) != CAIRO_STATUS_SUCCESS) {
     printf("Failed to create Cairo context\n");
     cairo_surface_destroy(render->surface);
