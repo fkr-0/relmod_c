@@ -19,6 +19,7 @@ typedef struct {
   const char *label;
   void (*action)(void *);
   void *metadata;
+  void (*on_select)(void *);
 } MenuItem;
 
 typedef struct {
@@ -117,6 +118,7 @@ struct Menu {
   X11FocusContext *focus_ctx; // X11 focus context - gets passed along the
                               // activation menu for handling focus events
 
+  void (*on_select)(MenuItem *item, void *user_data);
   bool (*activates_cb)(
       uint16_t, uint8_t,
       void *); // Activation callback
@@ -156,4 +158,8 @@ void menu_trigger_update(Menu *menu);
 void menu_redraw(Menu *menu);
 bool menu_cairo_is_setup(Menu *menu);
 void menu_confirm_selection(Menu *menu);
+void menu_trigger_on_select(Menu *menu);
+void menu_set_on_select_callback(Menu *menu,
+                                 void (*on_select)(MenuItem *item,
+                                                   void *user_data));
 #endif

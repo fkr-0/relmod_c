@@ -186,6 +186,8 @@ void menu_select_next(Menu *menu) {
   menu->selected_index = (menu->selected_index + 1) % menu->config.item_count;
   LOG("[%s][%d/%d] Select next", menu->config.title, menu->selected_index,
       menu->config.item_count);
+
+  menu_trigger_on_select(menu);
   menu_trigger_update(menu);
 }
 
@@ -196,13 +198,18 @@ void menu_select_prev(Menu *menu) {
                          menu->config.item_count;
   LOG("[%s][%d/%d] Select prev", menu->config.title, menu->selected_index,
       menu->config.item_count);
+
+  menu_trigger_on_select(menu);
   menu_trigger_update(menu);
 }
 
 void menu_select_index(Menu *menu, int index) {
-  if (!menu || index < 0 || (size_t)index >= menu->config.item_count)
+  if (!menu || index < 0 || (size_t)index >= menu->config.item_count ||
+      menu->selected_index == index)
     return;
   menu->selected_index = index;
+
+  menu_trigger_on_select(menu);
   menu_trigger_update(menu);
 }
 
@@ -254,4 +261,21 @@ void menu_redraw(Menu *menu) {
   if (!menu)
     return;
   cairo_menu_render_request_update(menu->user_data);
+}
+
+void menu_set_on_select_callback(Menu *menu,
+                                 void (*on_select)(MenuItem *item,
+                                                   void *user_data)) {
+  if (menu) {
+    menu->on_select = on_select;
+  }
+}
+
+void menu_trigger_on_select(Menu *menu) {
+  if (menu && menu->on_select) {
+    MenuItem *item = menu_get_selected_item(menu);
+    if (item) {
+      menu->on_select(item, menu->user_data);
+    }
+  }
 }
