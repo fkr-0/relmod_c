@@ -91,7 +91,7 @@ static Menu* create_benchmark_menu(MockX11* mock) {
         }
     };
     
-    Menu* menu = cairo_menu_create(mock->conn, mock->root, &config);
+    menu_setup_cairo(mock->conn, mock->root, &config);
     
     /* Clean up item labels */
     for (int i = 0; i < MENU_ITEMS; i++) {

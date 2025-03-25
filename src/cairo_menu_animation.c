@@ -11,10 +11,11 @@
 /* Initialize animation data */
 void cairo_menu_animation_init(CairoMenuData *data) {
   LOG("Initializing cairo_menu_animation\n");
+  printf("Initializing show animation\n");
   data->anim.show_animation = menu_animation_fade_in(200); /* 200ms fade in */
-  LOG("Show animation initialized: %p\n", data->anim.show_animation);
+  printf("Show animation initialized: %p\n", data->anim.show_animation);
   data->anim.hide_animation = menu_animation_fade_out(150); /* 150ms fade out */
-  LOG("Hide animation initialized: %p\n", data->anim.hide_animation);
+  printf("Hide animation initialized: %p\n", data->anim.hide_animation);
 
   data->anim.show_sequence = NULL; // Initialize to NULL
   data->anim.hide_sequence = NULL; // Initialize to NULL
@@ -35,14 +36,22 @@ void cairo_menu_animation_init(CairoMenuData *data) {
 
 /* Cleanup animation data */
 void cairo_menu_animation_cleanup(CairoMenuData *data) {
-  LOG("Cleaning up show animation: %p\n", data->anim.show_animation);
-  menu_animation_destroy(data->anim.show_animation);
-  LOG("Cleaning up hide animation: %p\n", data->anim.hide_animation);
-  menu_animation_destroy(data->anim.hide_animation);
-  LOG("Cleaning up show sequence: %p\n", data->anim.show_sequence);
-  menu_animation_sequence_destroy(data->anim.show_sequence);
-  LOG("Cleaning up hide sequence: %p\n", data->anim.hide_sequence);
-  menu_animation_sequence_destroy(data->anim.hide_sequence);
+  if (data->anim.show_animation) {
+    LOG("Cleaning up show animation: %p\n", data->anim.show_animation);
+    menu_animation_destroy(data->anim.show_animation);
+  }
+  if (data->anim.hide_animation) {
+    menu_animation_destroy(data->anim.hide_animation);
+    LOG("Cleaning up hide animation: %p\n", data->anim.hide_animation);
+  }
+  if (data->anim.show_sequence) {
+    LOG("Cleaning up show sequence: %p\n", data->anim.show_sequence);
+    menu_animation_sequence_destroy(data->anim.show_sequence);
+  }
+  if (data->anim.hide_sequence) {
+    LOG("Cleaning up hide sequence: %p\n", data->anim.hide_sequence);
+    menu_animation_sequence_destroy(data->anim.hide_sequence);
+  }
   LOG("Finished cleaning up animations\n");
 }
 
@@ -50,6 +59,8 @@ void cairo_menu_animation_cleanup(CairoMenuData *data) {
 void cairo_menu_animation_update(CairoMenuData *data, Menu *menu,
                                  double delta_time) {
   LOG("Updating animation\n");
+  printf("Updating animation: data=%p, menu=%p, delta_time=%f\n", data, menu,
+         delta_time);
   if (data->anim.is_animating) {
     if (menu->state == MENU_STATE_INITIALIZING) {
       if (data->anim.show_sequence) {

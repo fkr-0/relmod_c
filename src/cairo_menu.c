@@ -19,49 +19,53 @@ static bool cairo_menu_handle_expose(Menu *menu, void *user_data);
 static xcb_visualtype_t *get_root_visual_type(xcb_screen_t *screen);
 
 /* Create Cairo-rendered menu */
-Menu *cairo_menu_create(xcb_connection_t *conn, xcb_window_t parent,
-                        X11FocusContext *ctx, xcb_screen_t *screen,
-                        const MenuConfig *config) {
+void menu_setup_cairo(xcb_connection_t *conn, xcb_window_t parent,
+                      X11FocusContext *ctx, xcb_screen_t *screen, Menu *menu) {
+  MenuConfig *config = &menu->config;
+  printf("Creating Cairo-rendered menu\n");
   LOG("Creating menu %s", config->title);
   if (!conn || !config) {
     fprintf(stderr, "Invalid connection or configuration\n");
     fprintf(stderr, "Connection: %p, Config: %p\n", conn, config);
-    return NULL;
+    return;
   }
 
   /* Create menu instance */
-  Menu *menu = menu_create((MenuConfig *)config);
+  printf("Creating menu instance\n");
   if (!menu) {
     fprintf(stderr, "Failed to create menu\n");
-    return NULL;
+    return;
   }
   LOG("Menu created successfully\n");
 
   /* Create Cairo data */
+  printf("Allocating CairoMenuData\n");
   CairoMenuData *data = calloc(1, sizeof(CairoMenuData));
   if (!data) {
     fprintf(stderr, "Failed to allocate CairoMenuData\n");
     menu_destroy(menu);
-    return NULL;
+    return;
   }
   LOG("CairoMenuData allocated successfully\n");
 
   /* Get visual type for Cairo */
+  printf("Getting visual type for Cairo\n");
   xcb_visualtype_t *visual = get_root_visual_type(screen);
   if (!visual) {
     fprintf(stderr, "Failed to get visual type\n");
     free(data);
     menu_destroy(menu);
-    return NULL;
+    return;
   }
   LOG("Visual type retrieved successfully\n");
 
   /* Initialize rendering */
+  printf("Initializing rendering\n");
   if (!cairo_menu_render_init(data, conn, screen, parent, ctx, visual)) {
     fprintf(stderr, "Failed to initialize rendering\n");
     free(data);
     menu_destroy(menu);
-    return NULL;
+    return;
   }
   data->conn = conn;
   /* data->render.window = parent; */
@@ -69,6 +73,7 @@ Menu *cairo_menu_create(xcb_connection_t *conn, xcb_window_t parent,
   LOG("Rendering initialized successfully\n");
 
   /* Initialize animations */
+  printf("Initializing animations\n");
   cairo_menu_animation_init(data);
   /* LOG("Animations initialized successfully\n"); */
   cairo_menu_animation_set_default(data, MENU_ANIM_FADE, MENU_ANIM_FADE, 200.0);
@@ -88,6 +93,7 @@ Menu *cairo_menu_create(xcb_connection_t *conn, xcb_window_t parent,
   /* } */
 
   /* Set up menu callbacks */
+  printf("Setting up menu callbacks\n");
   menu->cleanup_cb = cairo_menu_cleanup;
   menu->update_cb = cairo_menu_update;
   menu->user_data = data;
@@ -97,9 +103,10 @@ Menu *cairo_menu_create(xcb_connection_t *conn, xcb_window_t parent,
   // ((CairoMenuData *)menu->user_data)->render.window;
   /* data->menu = menu; */
   /* data->anim.last_frame.tv_sec = 0; */
-
-  return menu;
+  printf("Menu creation completed\n");
 }
+
+bool menu_cairo_is_setup(Menu *menu) { return menu && menu->user_data; }
 
 /* Cleanup resources */
 static void cairo_menu_cleanup(void *user_data) {
@@ -114,9 +121,12 @@ static void cairo_menu_cleanup(void *user_data) {
 
 /* Update menu state */
 static void cairo_menu_update(Menu *menu, void *user_data) {
+  printf("Updating menu state\n");
   CairoMenuData *data = (CairoMenuData *)user_data;
-  if (!data)
+  if (!data) {
+    printf("No data found\n");
     return;
+  }
 
   /* Handle animation updates */
   struct timeval now;
@@ -124,11 +134,13 @@ static void cairo_menu_update(Menu *menu, void *user_data) {
 
   double delta = (now.tv_sec - data->anim.last_frame.tv_sec) * 1000.0 +
                  (now.tv_usec - data->anim.last_frame.tv_usec) / 1000.0;
+  printf("Delta time: %f\n", delta);
 
   cairo_menu_animation_update(data, menu, delta);
   data->anim.last_frame = now;
 
   if (cairo_menu_render_needs_update(data)) {
+    printf("Rendering menu\n");
     cairo_menu_render_begin(data);
     cairo_menu_render_clear(data, &menu->config.style);
     cairo_menu_render_title(data, menu->config.title, &menu->config.style);

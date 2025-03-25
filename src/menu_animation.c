@@ -116,17 +116,18 @@ static void update_property(MenuAnimationProperty *prop, double delta_time) {
     prop->current_value = menu_animation_interpolate(
         prop->start_value, prop->end_value, progress, menu_anim_ease_in_out);
   }
+  printf("Updated property: current_time=%f, duration=%f, current_value=%f, end_value=%f\n",
+         prop->current_time, prop->duration, prop->current_value, prop->end_value);
 }
 
 void menu_animation_update(MenuAnimation *anim, double delta_time) {
   if (!anim)
     return;
-
+  printf("Updating animation: anim=%p, delta_time=%f\n", anim, delta_time);
   update_property(&anim->opacity, delta_time);
   update_property(&anim->position_x, delta_time);
   update_property(&anim->position_y, delta_time);
   update_property(&anim->scale, delta_time);
-
   if (!anim->opacity.is_running && !anim->position_x.is_running &&
       !anim->position_y.is_running && !anim->scale.is_running) {
     if (anim->completion_callback) {
@@ -296,10 +297,9 @@ void menu_animation_sequence_update(MenuAnimationSequence *seq,
                                     double delta_time) {
   if (!seq || !seq->is_running || seq->current >= seq->count)
     return;
-
+  printf("Updating animation sequence: seq=%p, delta_time=%f\n", seq, delta_time);
   MenuAnimation *current = seq->animations[seq->current];
   menu_animation_update(current, delta_time);
-
   if (!menu_animation_is_running(current)) {
     seq->current++;
     if (seq->current < seq->count) {

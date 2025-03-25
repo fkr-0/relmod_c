@@ -157,7 +157,7 @@ Menu* create_clock_menu(xcb_connection_t* conn, xcb_window_t root) {
     };
     
     /* Create menu */
-    Menu* menu = cairo_menu_create(conn, root, &config);
+    menu_setup_cairo(conn, root, &config);
     free(items);  /* Menu creates its own copy */
     
     if (!menu) {

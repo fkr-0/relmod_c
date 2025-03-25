@@ -54,7 +54,7 @@ MenuConfig config = {
 
 2. Create and register menu:
 ```c
-Menu* menu = cairo_menu_create(conn, root, &config);
+menu_setup_cairo(conn, root, &config);
 menu_manager_register(manager, menu);
 ```
 
@@ -137,7 +137,7 @@ Menu* create_dir_menu(xcb_connection_t* conn, xcb_window_t root) {
         }
     };
     
-    return cairo_menu_create(conn, root, &config);
+    menu_setup_cairo(conn, root, &config);
 }
 ```
 

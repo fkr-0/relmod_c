@@ -21,22 +21,21 @@ typedef struct {
 
 /* Initialize input handler with menu manager */
 InputHandler *input_handler_create();
-
 void input_handler_setup_x(InputHandler *handler);
-/* Clean up input handler resources */
+bool input_handler_is_connected(InputHandler *handler);
 void input_handler_destroy(InputHandler *handler);
 
 /* Process a single input event */
 bool input_handler_process_event(InputHandler *handler);
 
 bool input_handler_add_menu(InputHandler *handler, MenuConfig *config);
-bool input_handler_remove_menu(InputHandler *handler, Menu *menu);
+/* bool input_handler_remove_menu(InputHandler *handler, Menu *menu); */
 
 /* Add activation state */
-bool input_handler_add_activation_state(InputHandler *handler,
-                                        ActivationState *state);
-bool input_handler_handle_activation(InputHandler *handler, uint16_t mod_key,
-                                     uint8_t keycode);
+/* bool input_handler_add_activation_state(InputHandler *handler, */
+/*                                         ActivationState *state); */
+Menu *input_handler_handle_activation(InputHandler *handler, uint16_t mod_key,
+                                      uint8_t keycode);
 
 /* Run the main event loop */
 void input_handler_run(InputHandler *handler);

@@ -33,6 +33,7 @@ bool menu_manager_is_connected(MenuManager *mgr);
 void menu_manager_destroy(MenuManager *manager);
 
 bool menu_manager_register(MenuManager *manager, Menu *menu);
+Menu *menu_manager_menu_index(MenuManager *manager, size_t index);
 void menu_manager_unregister(MenuManager *manager, Menu *menu);
 
 bool menu_manager_handle_key_press(MenuManager *manager,

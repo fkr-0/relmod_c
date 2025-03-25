@@ -1,5 +1,6 @@
 /* test_cairo_menu_render.c - Unit tests for Cairo menu rendering */
 #include "../src/cairo_menu_render.h"
+#include "../src/input_handler.h"
 #include <assert.h>
 #include <stdio.h>
 #include <xcb/xcb.h>
@@ -23,16 +24,22 @@ static xcb_visualtype_t *get_root_visual_type(xcb_connection_t *conn) {
 
 /* Test rendering initialization */
 void test_render_init() {
-  xcb_connection_t *conn = xcb_connect(NULL, NULL);
+  InputHandler *handler = input_handler_create();
+  input_handler_setup_x(handler);
+  xcb_connection_t *conn = handler->conn;
   assert(conn);
 
-  xcb_screen_t *screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
+  xcb_screen_t *screen = handler->screen;
+  assert(screen);
+
+  xcb_window_t root = screen->root;
   xcb_window_t parent = screen->root;
   xcb_visualtype_t *visual = get_root_visual_type(conn);
   assert(visual);
 
   CairoMenuData data;
-  bool result = cairo_menu_render_init(&data, conn, parent, visual);
+  bool result = cairo_menu_render_init(&data, conn, screen, parent,
+                                       handler->focus_ctx, visual);
   assert(result);
 
   cairo_menu_render_cleanup(&data);
@@ -41,16 +48,23 @@ void test_render_init() {
 
 /* Test rendering operations */
 void test_render_operations() {
-  xcb_connection_t *conn = xcb_connect(NULL, NULL);
+
+  InputHandler *handler = input_handler_create();
+  input_handler_setup_x(handler);
+  xcb_connection_t *conn = handler->conn;
   assert(conn);
 
-  xcb_screen_t *screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
+  xcb_screen_t *screen = handler->screen;
+  assert(screen);
+
+  xcb_window_t root = screen->root;
   xcb_window_t parent = screen->root;
   xcb_visualtype_t *visual = get_root_visual_type(conn);
   assert(visual);
 
   CairoMenuData data;
-  cairo_menu_render_init(&data, conn, parent, visual);
+  bool result = cairo_menu_render_init(&data, conn, screen, parent,
+                                       handler->focus_ctx, visual);
 
   cairo_menu_render_begin(&data);
   cairo_menu_render_clear(&data,

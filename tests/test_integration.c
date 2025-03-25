@@ -2,8 +2,8 @@
 #include "../src/cairo_menu.h"
 #include "../src/input_handler.h"
 #include "../src/key_helper.h"
+#include "../src/menu_builder.h"
 #include "../src/menu_manager.h"
-#include "../src/window_menu.h"
 #include <X11/keysym.h>
 #include <assert.h>
 #include <stdio.h>
@@ -11,6 +11,9 @@
 #include <string.h>
 #include <unistd.h>
 
+void demo_action(void *user_data) {
+  printf("Menu item selected: %s\n", (char *)user_data);
+}
 /* Mock X11 environment */
 typedef struct {
   xcb_connection_t *conn;
@@ -108,14 +111,10 @@ static int simulate_key_release(InputHandler *handler, uint8_t keycode,
 static void test_menu_workflow(void) {
   printf("Testing complete menu workflow...\n");
 
-  MockX11 mock = setup_mock_x11();
+  InputHandler *handler = input_handler_create();
+  input_handler_setup_x(handler);
+  printf("Input handler created: %p\n", handler);
 
-  /* Create input handler */
-  InputHandler *handler =
-      input_handler_create(mock.conn, &mock.ewmh, mock.root);
-  assert(handler != NULL);
-
-  /* Create and register test menu */
   static MenuItem items[] = {{.id = "item1",
                               .label = "Item 1",
                               .action = test_action,
@@ -129,56 +128,47 @@ static void test_menu_workflow(void) {
                               .action = test_action,
                               .metadata = "item3"}};
 
-  MenuConfig config = {
-      .mod_key = SUPER_MASK, /* Super key */
-      .trigger_key = 31,     /* 'i' key */
-      .title = "Test Menu",
-      .items = items,
-      .item_count = 3,
-      .nav = {.next = {.key = 44, .label = "j"},          /* j key */
-              .prev = {.key = 45, .label = "k"},          /* k key */
-              .direct = {.keys = (uint8_t[]){10, 11, 12}, /* 1-3 keys */
-                         .count = 3}},
-      .act = {.activate_on_mod_release = true, .activate_on_direct_key = true}};
+  MenuBuilder builder1 = menu_builder_create("Menu 1", 1);
+  menu_builder_add_item(&builder1, "Item 1", demo_action, "item1");
+  menu_builder_set_mod_key(&builder1, XCB_MOD_MASK_4);              // Super key
+  menu_builder_set_trigger_key(&builder1, 31);                      // Space key
+  menu_builder_set_activation_state(&builder1, XCB_MOD_MASK_4, 31); // Super + i
+  MenuConfig *config1 = menu_builder_finalize(&builder1);
+  printf("Menu config created: %p\n", config1);
 
-  Menu *menu = cairo_menu_create(mock.conn, mock.root, &config);
-  menu_set_activation_state(menu, SUPER_MASK, 31);
-  input_handler_add_menu(handler, menu);
-  assert(menu != NULL);
-  /* assert(menu_manager_register(handler->menu_manager, menu)); */
+  assert(input_handler_add_menu(handler, config1));
+  Menu *menu1 = menu_manager_menu_index(handler->menu_manager, 0);
+  printf("Menu created: %p\n", menu1);
 
-  /* Test workflow: Activate -> Navigate -> Select -> Deactivate */
   int state = 0;
-  /* 1. Activate menu (Super+i) */
+  printf("1. Activate menu (Super+i)\n");
   state = simulate_key_press(handler, SUPER_KEY, state); /* Super down */
   state = simulate_key_press(handler, 31, state);        /* i press */
-  printf("Active menu: %s\n", menu->config.title);
-  printf("Active menu: %s\n", menu_manager_get_active(handler->menu_manager));
+  printf("Active menu: %s\n", menu1->config.title);
+  printf("Active menu: %s\n",
+         menu_manager_get_active(handler->menu_manager)->config.title);
   assert(state == SUPER_MASK);
-  assert(menu_manager_get_active(handler->menu_manager) == menu);
+  assert(menu_manager_get_active(handler->menu_manager) == menu1);
 
-  /* 2. Navigate down */
+  printf("2. Navigate down\n");
   state = simulate_key_press(handler, 44, state); /* j press */
-  assert(menu->selected_index == 1);
+  assert(menu1->selected_index == 1);
 
-  /* 3. Navigate up */
+  printf("3. Navigate up\n");
   state = simulate_key_press(handler, 45, state); /* k press */
-  assert(menu->selected_index == 0);
+  assert(menu1->selected_index == 0);
 
-  /* 4. Direct selection */
+  printf("4. Direct selection\n");
   state = simulate_key_press(handler, 11, state); /* 2 press */
-  assert(menu->selected_index == 1);
+  assert(menu1->selected_index == 1);
 
-  /* 5. Trigger action and deactivate */
+  printf("5. Trigger action and deactivate\n");
   action_count = 0;
   state = simulate_key_release(handler, SUPER_KEY, state); /* Super up */
   assert(action_count == 1);
   assert(menu_manager_get_active(handler->menu_manager) == NULL);
 
-  /* Clean up */
   input_handler_destroy(handler);
-  cleanup_mock_x11(&mock);
-
   printf("Menu workflow test passed\n");
 }
 
@@ -186,60 +176,82 @@ static void test_menu_workflow(void) {
 static void test_menu_switching(void) {
   printf("Testing menu switching...\n");
 
-  MockX11 mock = setup_mock_x11();
-  InputHandler *handler =
-      input_handler_create(mock.conn, &mock.ewmh, mock.root);
+  printf("Testing complete menu workflow...\n");
+
+  /* MockX11 mock = setup_mock_x11(); */
+
+  /* Create input handler */
+  /* InputHandler *handler = input_handler_create(); */
+  /* handler->conn = mock.conn; */
+  /* handler->screen = mock.screen; */
+  /* handler->root = &mock.root; */
+  /* handler->ewmh = &mock.ewmh; */
+
+  InputHandler *handler = input_handler_create();
+  input_handler_setup_x(handler);
   assert(handler != NULL);
 
   /* Create two test menus */
-  static MenuItem items1[] = {
-      {.id = "menu1_item1", .label = "Menu 1 Item 1", .action = test_action}};
-  static MenuItem items2[] = {
-      {.id = "menu2_item1", .label = "Menu 2 Item 1", .action = test_action}};
+  /* static MenuItem items1[] = { */
+  /*     {.id = "menu1_item1", .label = "Menu 1 Item 1", .action =
+   * test_action}}; */
+  /* static MenuItem items2[] = { */
+  /*     {.id = "menu2_item1", .label = "Menu 2 Item 1", .action =
+   * test_action}}; */
 
-  MenuConfig config1 = {.mod_key = XCB_MOD_MASK_4,
-                        .trigger_key = 31, /* i */
-                        .title = "Menu 1",
-                        .items = items1,
-                        .item_count = 1};
+  /* MenuConfig config1 = {.mod_key = XCB_MOD_MASK_4, */
+  /*                       .trigger_key = 31, /\* i *\/ */
+  /*                       .title = "Menu 1", */
+  /*                       .items = items1, */
+  /*                       .item_count = 1}; */
 
-  MenuConfig config2 = {.mod_key = XCB_MOD_MASK_4,
-                        .trigger_key = 32, /* o */
-                        .title = "Menu 2",
-                        .items = items2,
-                        .item_count = 1};
+  /* MenuConfig config2 = {.mod_key = XCB_MOD_MASK_4, */
+  /*                       .trigger_key = 32, /\* o *\/ */
+  /*                       .title = "Menu 2", */
+  /*                       .items = items2, */
+  /*                       .item_count = 1}; */
 
-  Menu *menu1 = cairo_menu_create(mock.conn, mock.root, &config1);
-  Menu *menu2 = cairo_menu_create(mock.conn, mock.root, &config2);
+  MenuBuilder builder1 = menu_builder_create("Menu 1", 1);
+  menu_builder_add_item(&builder1, "Item 1", demo_action, "item1");
+  menu_builder_set_mod_key(&builder1, XCB_MOD_MASK_4);              // Super key
+  menu_builder_set_trigger_key(&builder1, 31);                      // Space key
+  menu_builder_set_activation_state(&builder1, XCB_MOD_MASK_4, 31); // Super + i
+  MenuConfig *config1 = menu_builder_finalize(&builder1);
 
-  menu_set_activation_state(menu1, SUPER_MASK, 31);
-  menu_set_activation_state(menu2, SUPER_MASK, 32);
-  /* assert(menu_manager_register(handler->menu_manager, menu1)); */
-  /* assert(menu_manager_register(handler->menu_manager, menu2)); */
+  MenuBuilder builder2 = menu_builder_create("Menu 2", 1);
+  menu_builder_add_item(&builder2, "Item 1", demo_action, "item1");
+  menu_builder_set_mod_key(&builder2, XCB_MOD_MASK_4);              // Super key
+  menu_builder_set_trigger_key(&builder2, 32);                      // Space key
+  menu_builder_set_activation_state(&builder2, XCB_MOD_MASK_4, 32); // Super + o
+  MenuConfig *config2 = menu_builder_finalize(&builder2);
 
-  input_handler_add_menu(handler, menu1);
-  input_handler_add_menu(handler, menu2);
+  assert(input_handler_add_menu(handler, config1));
+  assert(input_handler_add_menu(handler, config2));
+  Menu *menu1 = menu_manager_menu_index(handler->menu_manager, 0);
+  Menu *menu2 = menu_manager_menu_index(handler->menu_manager, 1);
+
   /* Test switching between menus */
 
+  int state = 0;
   /* Activate first menu */
-  simulate_key_press(handler, SUPER_KEY, 0);       /* Super down */
-  simulate_key_press(handler, 31, XCB_MOD_MASK_4); /* i press */
+  state = simulate_key_press(handler, SUPER_KEY, 0);       /* Super down */
+  state = simulate_key_press(handler, 31, XCB_MOD_MASK_4); /* i press */
   assert(menu_manager_get_active(handler->menu_manager) == menu1);
 
   /* Switch to second menu */
-  simulate_key_release(handler, 31, XCB_MOD_MASK_4); /* i release */
-  simulate_key_press(handler, 32, XCB_MOD_MASK_4);   /* o press */
+  state = simulate_key_release(handler, 31, XCB_MOD_MASK_4); /* i release */
+  state = simulate_key_press(handler, 32, XCB_MOD_MASK_4);   /* o press */
   assert(menu_manager_get_active(handler->menu_manager) == menu2);
 
-  fprintf(stderr, "Active menu: %s\n",
-          menu_manager_get_active(handler->menu_manager));
+  /* fprintf(stderr, "Active menu: %s\n", */
+  /*         menu_manager_get_active(handler->menu_manager)); */
   /* Deactivate */
   simulate_key_release(handler, SUPER_KEY, 0); /* Super up */
   assert(menu_manager_get_active(handler->menu_manager) == NULL);
 
   /* Clean up */
   input_handler_destroy(handler);
-  cleanup_mock_x11(&mock);
+  /* cleanup_mock_x11(&mock); */
 
   printf("Menu switching test passed\n");
 }

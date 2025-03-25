@@ -87,13 +87,16 @@ bool cairo_menu_render_init(CairoMenuData *data, xcb_connection_t *conn,
                             xcb_screen_t *screen, xcb_window_t parent,
                             X11FocusContext *ctx, xcb_visualtype_t *visual) {
   CairoMenuRenderData *render = &data->render;
-  LOG("Initializing rendering");
+  LOG("Initializing rendering: conn=%p, screen=%p, parent=%u, ctx=%p, "
+      "visual=%p",
+      conn, screen, parent, ctx, visual);
 
   /* Create initial window */
-  render->width = 800; /* Default size */
-  render->height = 600;
+  render->width = 400; /* Default size */
+  render->height = 300;
   render->window =
       create_window(conn, parent, ctx, screen, render->width, render->height);
+  LOG("Creating window: %d", render->window); // Add debug print
   /* screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data; */
   /* xcb_depth_iterator_t depth_iter =
    * xcb_screen_allowed_depths_iterator(screen); */
@@ -121,7 +124,8 @@ bool cairo_menu_render_init(CairoMenuData *data, xcb_connection_t *conn,
   printf("Creating Cairo surface\n");
   render->surface = cairo_xcb_surface_create(conn, render->window, visual,
                                              render->width, render->height);
-  printf("Cairo surface created: %p, status=%d\n", render->surface, cairo_surface_status(render->surface));
+  printf("Cairo surface created: %p, status=%d\n", render->surface,
+         cairo_surface_status(render->surface));
   if (cairo_surface_status(render->surface) != CAIRO_STATUS_SUCCESS) {
     printf("Failed to create Cairo surface\n");
     xcb_destroy_window(conn, render->window);
@@ -132,7 +136,8 @@ bool cairo_menu_render_init(CairoMenuData *data, xcb_connection_t *conn,
   /* Create Cairo context */
   printf("Creating Cairo context\n");
   render->cr = cairo_create(render->surface);
-  printf("Cairo context created: %p, status=%d\n", render->cr, cairo_status(render->cr));
+  printf("Cairo context created: %p, status=%d\n", render->cr,
+         cairo_status(render->cr));
   if (cairo_status(render->cr) != CAIRO_STATUS_SUCCESS) {
     printf("Failed to create Cairo context\n");
     cairo_surface_destroy(render->surface);
@@ -235,9 +240,14 @@ void cairo_menu_render_show(CairoMenuData *data) {
     cairo_menu_render_items(data, data->menu);
     cairo_menu_render_end(data);
   }
+  int width = 400; /* Default size */
+  xcb_screen_t *screen =
+      xcb_setup_roots_iterator(xcb_get_setup(data->conn)).data;
+  int x = screen->width_in_pixels - width - 20; // Padding 20px
+  int y = 20;
   xcb_configure_window(data->conn, data->render.window,
                        XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y,
-                       (const uint32_t[]){0, 0});
+                       (const uint32_t[]){x, y});
 }
 void cairo_menu_render_hide(CairoMenuData *data) {
   xcb_unmap_window(data->conn, data->render.window);
@@ -327,10 +337,11 @@ void cairo_menu_render_item(CairoMenuData *data, const MenuItem *item,
 
 void cairo_menu_render_items(CairoMenuData *data, const Menu *menu) {
   printf("Rendering items\n");
+  printf("Rendering items: data=%p, menu=%p\n", data, menu);
   const MenuStyle *style = &menu->config.style;
   double y = style->padding * 2 + style->font_size;
-
   for (size_t i = 0; i < menu->config.item_count; i++) {
+    printf("Rendering item %zu: %s\n", i, menu->config.items[i].label);
     cairo_menu_render_item(data, &menu->config.items[i], style,
                            (int)i == menu->selected_index, y);
     y += style->item_height;

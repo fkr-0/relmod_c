@@ -102,9 +102,12 @@ MenuManager *menu_manager_connect(MenuManager *mgr, xcb_connection_t *conn,
 void menu_manager_destroy(MenuManager *mgr) {
   if (!mgr)
     return;
-  menu_hide(mgr->active_menu);
+  if (mgr->active_menu) {
+    menu_hide(mgr->active_menu);
+  }
   registry_cleanup((MenuRegistryEntry *)mgr->registry);
-  x11_focus_cleanup(mgr->focus_ctx);
+
+  LOG("Cleaned up focus context");
   free(mgr);
 }
 
@@ -188,11 +191,10 @@ bool menu_manager_handle_key_release(MenuManager *mgr,
   if (!mgr || !event)
     return false;
   LOG("Key release %d %d %p", event->detail, event->state, mgr->active_menu);
-  /* if (mgr->active_menu && !menu_handle_key_release(mgr->active_menu, event))
-   * { */
-  /*   menu_manager_deactivate(mgr); */
-  /*   return true; */
-  /* } */
+  if (mgr->active_menu && !menu_handle_key_release(mgr->active_menu, event)) {
+    menu_manager_deactivate(mgr);
+    return true;
+  }
   return false;
 }
 bool menu_manager_activate(MenuManager *mgr, Menu *menu) {
@@ -206,11 +208,11 @@ bool menu_manager_activate(MenuManager *mgr, Menu *menu) {
 
   LOG("Activating menu: %s", menu->config.title);
   // Deactivate any existing active menu
-  if (mgr->active_menu && mgr->active_menu != menu) {
-    LOG("Deactivating existing active menu: %s",
-        mgr->active_menu->config.title);
-    menu_manager_deactivate(mgr);
-  }
+  /* if (mgr->active_menu && mgr->active_menu != menu) { */
+  /*   LOG("Deactivating existing active menu: %s", */
+  /*       mgr->active_menu->config.title); */
+  /*   menu_manager_deactivate(mgr); */
+  /* } */
   mgr->active_menu = menu;
 
   // Inject the X11FocusContext before showing the menu
@@ -241,7 +243,7 @@ void menu_manager_deactivate(MenuManager *mgr) {
     return;
   LOG("Deactivated menu: %s", mgr->active_menu->config.title);
   menu_hide(mgr->active_menu);
-  cairo_menu_deactivate(mgr->active_menu);
+  /* cairo_menu_deactivate(mgr->active_menu); */
   mgr->active_menu = NULL;
 }
 
@@ -278,4 +280,16 @@ char *menu_manager_status_string(MenuManager *mgr) {
   }
 
   return buffer;
+}
+
+Menu *menu_manager_menu_index(MenuManager *manager, size_t index) {
+  if (!manager)
+    return NULL;
+  MenuRegistryEntry *entry = (MenuRegistryEntry *)manager->registry;
+  while (entry && index > 0) {
+    entry = entry->next;
+    index--;
+  }
+  printf("Menu at index %zu: %p\n", index, entry ? entry->menu : NULL);
+  return entry ? entry->menu : NULL;
 }

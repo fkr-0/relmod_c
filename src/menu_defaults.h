@@ -24,7 +24,7 @@ static inline NavigationConfig navigation_config_default() {
 
 /* Default initializer for MenuStyle */
 static inline MenuStyle menu_style_default() {
-  return (MenuStyle){.background_color = {0.0, 0.0, 0.0, 0.5}, // RGBA
+  return (MenuStyle){.background_color = {0.5, 0.0, 0.0, 0.5}, // RGBA
                      .text_color = {0.2, 0.2, 1.0, 1.0},       // White
                      .highlight_color = {0.2, 0.6, 1.0, 1.0},  // Blue
                      .font_face = "Sans",

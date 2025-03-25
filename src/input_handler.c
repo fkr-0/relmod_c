@@ -1,12 +1,13 @@
 /* input_handler.c - Complete and updated Input handling implementation */
 #include "input_handler.h"
-#include "cairo_menu.h"        // Include cairo_menu.h for cairo_menu_create
-#include "cairo_menu_render.h" // Include cairo_menu.h for cairo_menu_create
+#include "cairo_menu.h"        // Include cairo_menu.h for menu_setup_cairo
+#include "cairo_menu_render.h" // Include cairo_menu.h for menu_setup_cairo
 #include "menu_manager.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/select.h>
 #include <sys/time.h>
+#include <xcb/xcb_ewmh.h>
 
 #ifdef MENU_DEBUG
 #define LOG_PREFIX "[INPUT]"
@@ -31,77 +32,224 @@ InputHandler *input_handler_create() {
 }
 
 void input_handler_setup_x(InputHandler *handler) {
-
   xcb_connection_t *conn = xcb_connect(NULL, NULL);
   if (xcb_connection_has_error(conn)) {
-    free(handler);
-    LOG("[ERROR] Failed to connect to X server");
-    return;
+    fprintf(stderr, "[ERROR] Failed to connect to X server\n");
+    goto fail;
   }
-  LOG("[XCB] Connected to X server");
 
   xcb_screen_t *screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
   xcb_window_t root = screen->root;
-  xcb_ewmh_connection_t ewmh = {0};
-  xcb_intern_atom_cookie_t *cookie = xcb_ewmh_init_atoms(conn, &ewmh);
-  if (!xcb_ewmh_init_atoms_replies(&ewmh, cookie, NULL)) {
-    LOG("[ERROR] Failed to initialize EWMH");
-    xcb_disconnect(conn);
-    return;
+  xcb_ewmh_connection_t *ewmh = calloc(1, sizeof(xcb_ewmh_connection_t));
+  if (!ewmh) {
+    fprintf(stderr, "[ERROR] Failed to allocate EWMH structure\n");
+    goto fail_conn; // jump to cleanup for connection
   }
-  LOG("[XCB] EWMH initialized");
 
-  LOG("[INIT-X] Connecting input handler");
-  if (!handler) {
-    return;
+  if (!xcb_ewmh_init_atoms_replies(ewmh, xcb_ewmh_init_atoms(conn, ewmh),
+                                   NULL)) {
+    fprintf(stderr, "[ERROR] Failed to initialize EWMH\n");
+    xcb_ewmh_connection_wipe(ewmh);
+    free(ewmh);
+    goto fail_conn;
   }
-  LOG("[INIT] Input handler ready");
+
+  // Set up focus context and assign to handler
+  handler->conn = conn;
+  handler->screen = screen;
+  handler->focus_ctx = x11_focus_init(conn, ewmh);
+  if (!handler->focus_ctx) {
+    fprintf(stderr, "[ERROR] Failed to create focus context\n");
+    goto fail_ewmh; // cleanup ewmh and connection
+  }
+  handler->ewmh = ewmh;
+  handler->root = malloc(sizeof(xcb_window_t));
+  if (!handler->root) {
+    fprintf(stderr, "[ERROR] Failed to allocate memory for root\n");
+    goto fail_focus;
+  }
+  *handler->root = root;
+
   if (!conn || root == XCB_NONE) {
     LOG("[ERROR] Failed to create input handler");
-    xcb_ewmh_connection_wipe(&ewmh);
+    xcb_ewmh_connection_wipe(ewmh);
     xcb_disconnect(conn);
+    free(ewmh);
+    goto fail;
   }
   handler->screen = screen;
   handler->conn = conn;
   handler->root = &root; // Set root root
   handler->modifier_mask = 0;
-  handler->focus_ctx = x11_focus_init(conn, &ewmh);
-  handler->ewmh = &ewmh;
+  handler->focus_ctx = x11_focus_init(conn, ewmh);
+  handler->ewmh = ewmh;
 
   if (!handler->focus_ctx)
     goto fail;
 
   if (!handler->menu_manager)
     goto fail;
-  menu_manager_connect(handler->menu_manager, conn, handler->focus_ctx, &ewmh);
+  menu_manager_connect(handler->menu_manager, conn, handler->focus_ctx, ewmh);
   x11_set_window_floating(handler->focus_ctx, root);
   if (!x11_grab_inputs(handler->focus_ctx, root)) {
     fprintf(stderr, "[INPUT] Failed to grab inputs\n");
     goto fail;
   }
-
+  // Additional initialization steps...
   return;
-
 fail:
+  if (handler) {
+    input_handler_destroy(handler);
+  }
   if (handler->menu_manager)
     menu_manager_destroy(handler->menu_manager);
   if (handler->focus_ctx)
     x11_focus_cleanup(handler->focus_ctx);
-  free(handler);
+
+  if (ewmh) {
+    xcb_ewmh_connection_wipe(ewmh);
+  }
+  if (ewmh) {
+    free(ewmh);
+  }
+  if (conn) {
+    xcb_disconnect(conn);
+    free(conn);
+  }
+  if (handler->menu_manager) {
+    free(handler->menu_manager);
+    free(handler);
+  }
+  return;
+fail_focus:
+  x11_release_inputs(handler->focus_ctx);
+  x11_focus_cleanup(handler->focus_ctx);
+  free(handler->focus_ctx);
+
+fail_ewmh:
+  xcb_ewmh_connection_wipe(ewmh);
+  free(ewmh);
+fail_conn:
+  xcb_disconnect(conn);
+  // Optionally free handler if allocated here
   return;
 }
+/* void input_handler_setup_x(InputHandler *handler) { */
+/*   xcb_connection_t *conn = xcb_connect(NULL, NULL); */
+/*   if (xcb_connection_has_error(conn)) { */
+/*     free(handler); */
+/*     LOG("[ERROR] Failed to connect to X server"); */
+/*     goto fail; */
+/*   } */
+/*   LOG("[XCB] Connected to X server"); */
+
+/*   xcb_screen_t *screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
+ */
+/*   xcb_window_t root = screen->root; */
+/*   xcb_ewmh_connection_t *ewmh = calloc(1, sizeof(xcb_ewmh_connection_t)); */
+/*   if (!xcb_ewmh_init_atoms_replies(ewmh, xcb_ewmh_init_atoms(conn, ewmh), */
+/*                                    NULL)) { */
+/*     LOG("[ERROR] Failed to initialize EWMH"); */
+/*     xcb_ewmh_connection_wipe(ewmh); */
+/*     xcb_disconnect(conn); */
+/*     free(ewmh); */
+/*     goto fail; */
+/*   } */
+/*   LOG("[XCB] EWMH initialized"); */
+
+/*   LOG("[INIT-X] Connecting input handler"); */
+/*   if (!handler) { */
+/*     goto fail; */
+/*   } */
+/*   LOG("[INIT] Input handler ready"); */
+/*   if (!conn || root == XCB_NONE) { */
+/*     LOG("[ERROR] Failed to create input handler"); */
+/*     xcb_ewmh_connection_wipe(ewmh); */
+/*     xcb_disconnect(conn); */
+/*     free(ewmh); */
+/*     goto fail; */
+/*   } */
+/*   handler->screen = screen; */
+/*   handler->conn = conn; */
+/*   handler->root = &root; // Set root root */
+/*   handler->modifier_mask = 0; */
+/*   handler->focus_ctx = x11_focus_init(conn, ewmh); */
+/*   handler->ewmh = ewmh; */
+
+/*   if (!handler->focus_ctx) */
+/*     goto fail; */
+
+/*   if (!handler->menu_manager) */
+/*     goto fail; */
+/*   menu_manager_connect(handler->menu_manager, conn, handler->focus_ctx,
+ * ewmh); */
+/*   x11_set_window_floating(handler->focus_ctx, root); */
+/*   if (!x11_grab_inputs(handler->focus_ctx, root)) { */
+/*     fprintf(stderr, "[INPUT] Failed to grab inputs\n"); */
+/*     goto fail; */
+/*   } */
+/*   /\* if (cookie) *\/ */
+/*   /\*   free(cookie); *\/ */
+
+/*   return; */
+
+/* fail: */
+/*   if (handler) { */
+/*     input_handler_destroy(handler); */
+/*   } */
+/*   if (handler->menu_manager) */
+/*     menu_manager_destroy(handler->menu_manager); */
+/*   if (handler->focus_ctx) */
+/*     x11_focus_cleanup(handler->focus_ctx); */
+
+/*   if (ewmh) { */
+/*     xcb_ewmh_connection_wipe(ewmh); */
+/*   } */
+/*   if (ewmh) { */
+/*     free(ewmh); */
+/*   } */
+/*   if (conn) { */
+/*     xcb_disconnect(conn); */
+/*     free(conn); */
+/*   } */
+/*   return; */
+/* } */
 
 void input_handler_destroy(InputHandler *handler) {
   if (!handler)
     return;
+  LOG("[DESTROY] Destroying input handler:root");
+
+  /* if (handler->root) { */
+  /*   free(handler->root); */
+  /* } */
+  LOG("[DESTROY] Destroying input handler:ewmh");
+  if (handler->ewmh) {
+    xcb_ewmh_connection_wipe(handler->ewmh);
+    free(handler->ewmh);
+  }
+  LOG("[DESTROY] Destroying input handler:focus");
   if (handler->focus_ctx) {
-    x11_release_inputs(handler->focus_ctx);
+    /* x11_release_inputs(handler->focus_ctx); */
     x11_focus_cleanup(handler->focus_ctx);
   }
-  if (handler->menu_manager)
+  LOG("[DESTROY] Destroying input handler:menumgr");
+  if (handler->menu_manager) {
+    LOG("[DESTROY] Destroying menu manager");
     menu_manager_destroy(handler->menu_manager);
-  free(handler->activation_states);
-  free(handler);
+  }
+
+  /* if (handler->screen) { */
+
+  /* } */
+  if (handler->conn) {
+    xcb_disconnect(handler->conn);
+  }
+  if (handler->activation_states) {
+    free(handler->activation_states);
+  }
+  if (handler)
+    free(handler);
 }
 
 static bool update_callback(Menu *menu, struct timeval *last_update,
@@ -184,28 +332,69 @@ bool input_handler_handle_event(InputHandler *handler,
 
     if (kp->detail == 9 || kp->detail == 24) {
       LOG("[IH-PRESS] Exit because esc/q | Modifier mask: 0x%x", kp->state);
+      if (handler->menu_manager->active_menu) {
+        menu_manager_deactivate(handler->menu_manager);
+      }
       return true; // ESC or 'q'
     }
-
-    if (handler->modifier_mask == 0 && kp->state != 0) {
-      LOG("[IH-PRESS] Setting modmask because globmod=0 Modifier mask: 0x%x",
-          kp->state);
-      handler->modifier_mask = kp->state;
+    // run_mode == 0: prio to menu switching
+    // run_mode == 1: prio to active menu
+    int run_mode = 0;
+    if (run_mode == 0) {
+      Menu *menu_to_activate =
+          input_handler_handle_activation(handler, kp->state, kp->detail);
+      if (menu_to_activate) {
+        LOG("[IH-PRESS] Menu_To_Activate: %s, Already Active?: %d",
+            menu_to_activate->config.title,
+            (handler->menu_manager->active_menu == menu_to_activate));
+        if (handler->menu_manager->active_menu != menu_to_activate) {
+          if (handler->menu_manager->active_menu) {
+            menu_manager_deactivate(handler->menu_manager);
+          }
+          if (!menu_cairo_is_setup(menu_to_activate)) {
+            menu_setup_cairo(handler->conn, *handler->root, handler->focus_ctx,
+                             handler->screen, menu_to_activate);
+          }
+          menu_manager_activate(handler->menu_manager, menu_to_activate);
+          return false;
+        } else {
+          return menu_handle_key_press(handler->menu_manager->active_menu, kp);
+        }
+      } else {
+        if (handler->menu_manager->active_menu) {
+          return menu_handle_key_press(handler->menu_manager->active_menu, kp);
+          /* handler->menu_manager->active_menu */
+        }
+      }
+    } else {
+      // run_mode == 1: prio to active menu
+      if (handler->menu_manager->active_menu) {
+        if (menu_handle_key_press(handler->menu_manager->active_menu, kp)) {
+          return true;
+        }
+        /* handler->menu_manager->active_menu */
+      }
+      Menu *menu_to_activate =
+          input_handler_handle_activation(handler, kp->state, kp->detail);
+      if (menu_to_activate) {
+        if (handler->menu_manager->active_menu != menu_to_activate) {
+          if (handler->menu_manager->active_menu) {
+            menu_manager_deactivate(handler->menu_manager);
+          }
+          if (!menu_cairo_is_setup(menu_to_activate)) {
+            menu_setup_cairo(handler->conn, *handler->root, handler->focus_ctx,
+                             handler->screen, menu_to_activate);
+          }
+          menu_manager_activate(handler->menu_manager, menu_to_activate);
+        }
+      }
+      return false;
     }
-
-    if (input_handler_handle_activation(handler, kp->state, kp->detail)) {
-      LOG("[IH-PRESS] handle activation returned true, activating.");
-    }
-
-    LOG("[IH-PRESS] PASS event TO MENU MANAGER");
-    return menu_manager_handle_key_press(handler->menu_manager, kp);
   }
 
   case XCB_FOCUS_IN: {
     xcb_focus_in_event_t *focus_event = (xcb_focus_in_event_t *)event;
     LOG("[IH-FOCUS] Focus in event: %d", focus_event->event);
-    /* fprintf(stderr, "Focus changed to window: %d\n", window); */
-
     return false;
   }
   case XCB_KEY_RELEASE: {
@@ -213,18 +402,25 @@ bool input_handler_handle_event(InputHandler *handler,
     LOG("[IH-RELEASE]  release: code=%u, state=0x%x, globstate=0x%x",
         kr->detail, kr->state, handler->modifier_mask);
 
-    if (handler->modifier_mask == 0 && kr->state != 0) {
-      handler->modifier_mask = kr->state;
-      LOG("[IH-RELEASE]  set glob state because was 0: code=%u, state=0x%x, "
-          "globstate=0x%x",
-          kr->detail, kr->state, handler->modifier_mask);
-    }
+    /* if (handler->modifier_mask == 0 && kr->state != 0) { */
+    /*   handler->modifier_mask = kr->state; */
+    /*   LOG("[IH-RELEASE]  set glob state because was 0: code=%u, state=0x%x, "
+     */
+    /*       "globstate=0x%x", */
+    /*       kr->detail, kr->state, handler->modifier_mask); */
+    /* } */
 
     LOG("[IH-RELEASE] PASS event TO MENU MANAGER");
-    menu_manager_handle_key_release(handler->menu_manager, kr);
-    bool ex = is_modifier_release(kr->state, kr->detail);
-    LOG("[IH-RELEASE] FINALIZING,exit=%d", ex);
-    return ex;
+    /* menu_manager_handle_key_release(handler->menu_manager, kr); TODO maybe
+     * later*/
+    if (is_modifier_release(kr->state, kr->detail)) {
+      if (handler->menu_manager->active_menu) {
+        menu_manager_deactivate(handler->menu_manager);
+      }
+      return true;
+    }
+    LOG("[IH-RELEASE] FINALIZING,exit=%d", false);
+    return false;
   }
   default:
     LOG("Unhandled event type: 0x%x", type);
@@ -236,175 +432,83 @@ bool input_handler_add_menu(InputHandler *handler, MenuConfig *config) {
   if (!handler || !config)
     return false;
   LOG("[HANDLER->MANAGER] Adding menu: [%s]", config->title);
-
-  ActivationState state = config->act_state;
-  /* state.config = config; */
-  /* state.menu = menu; */
-  input_handler_add_activation_state(handler, &state);
+  menu_manager_register(handler->menu_manager, menu_create(config));
+  // free (config)?
+  /* ActivationState state = config->act_state; */
+  /* menu_setup_cairo(handler->conn, *handler->root, handler->focus_ctx, */
+  /*                  handler->screen, config); */
+  /* if (!state.menu) { */
+  /*   fprintf(stderr, "Menu creation failed\n"); */
+  /*   return false; */
+  /* } */
+  /* printf("Menu created: %p\n", state.menu); */
+  /* input_handler_add_activation_state(handler, &state); */
+  /* printf("Added activation state: mod_key=0x%x, keycode=%u\n", state.mod_key,
+   */
+  /*        state.keycode); */
   return true;
 }
 
-bool input_handler_remove_menu(InputHandler *handler, Menu *menu) {
-  if (!handler || !menu)
-    return false;
-  LOG("[HANDLER->MANAGER] Rem menu: [%s]", menu->config.title);
-  menu_manager_unregister(handler->menu_manager, menu);
-  return true;
-}
+/* bool input_handler_remove_menu(InputHandler *handler, Menu *menu) { */
+/*   if (!handler || !menu) */
+/*     return false; */
+/*   LOG("[HANDLER->MANAGER] Rem menu: [%s]", menu->config.title); */
+/*   menu_manager_unregister(handler->menu_manager, menu); */
+/*   return true; */
+/* } */
 
-bool input_handler_add_activation_state(InputHandler *handler,
-                                        ActivationState *state) {
-  if (!handler || !state)
-    return false;
-  handler->activation_states =
-      realloc(handler->activation_states,
-              sizeof(ActivationState) * (handler->activation_state_count + 1));
-  if (!handler->activation_states)
-    return false;
-  handler->activation_state_count++;
-  handler->activation_states[handler->activation_state_count - 1] = *state;
-  return true;
-}
-
-/* Registry iteration
- * Calls the given function for each registered menu
- * Stops iteration if the callback returns false.
- * Usage:
- * menu_manager_foreach(manager, callback_fn, user_data);
- * Example callback_fn:
- * bool callback_fn(Menu *menu, struct timeval *last_update, void *user_data) {
- *  // Do something with menu, e.g. match ev->state + ev->detail
- * if (menu->mod_key == ev->state && menu->trigger_key == ev->detail) {
- *   menu_manager_activate(manager, menu);
- *   return false; // Stop iteration
- * }
- * return true; // Continue iteration
- * */
-/* bool input_handler_handle_activation(InputHandler *handler, uint16_t mod_key,
+/* bool input_handler_add_activation_state(InputHandler *handler, */
+/*                                         ActivationState *state) { */
+/*   if (!handler || !state) */
+/*     return false; */
+/*   handler->activation_states = */
+/*       realloc(handler->activation_states, */
+/*               sizeof(ActivationState) * (handler->activation_state_count +
+ * 1)); */
+/*   if (!handler->activation_states) */
+/*     return false; */
+/*   handler->activation_state_count++; */
+/*   handler->activation_states[handler->activation_state_count - 1] = *state;
  */
-/*                                      uint8_t keycode) { */
-/*   LOG("Handling activation: mod_key=0x%x, keycode=%u", mod_key, keycode); */
-
-/*   // use */
-/*   // void menu_manager_foreach(MenuManager *mgr, MenuManagerForEachFn fn, */
-/*   // void *user_data) { */
-/*   /\* const bool callback_fn(Menu * menu, struct timeval * last_update, *\/
- */
-/*   /\*                        void *user_data) { *\/ */
-/*   /\*   if (menu->config.act_state.mod_key == mod_key && *\/ */
-/*   /\*       menu->config.act_state.keycode == keycode) { *\/ */
-/*   /\*     LOG("Activation state matched: mod_key=0x%x, keycode=%u", mod_key,
- * *\/ */
-/*   /\*         keycode); *\/ */
-/*   /\*     menu_manager_activate(handler->menu_manager, menu); *\/ */
-/*   /\*     return false; *\/ */
-/*   /\*   } *\/ */
-/*   /\*   return true; *\/ */
-/*   /\* } *\/ */
-/*   /\* menu_manager_foreach(handler->menu_manager, callback_fn, NULL); *\/ */
-
-/*   for (size_t i = 0; i < handler->activation_state_count; i++) { */
-/*     ActivationState *state = &handler->activation_states[i]; */
-/*     LOG("Checking activation state: mod_key=0x%x, keycode=%u",
- * state->mod_key, */
-/*         state->keycode); */
-/*     if (state->mod_key == mod_key && state->keycode == keycode) { */
-/*       LOG("Activation state matched: mod_key=0x%x, keycode=%u", mod_key, */
-/*           keycode); */
-/*       // LOG state */
-/*       LOG("State: config=%p, mod_key=0x%x, keycode=%u, initialized=%d, " */
-/*           "menu=%p, title=%s", */
-/*           state->config, state->mod_key, state->keycode, state->initialized,
- */
-/*           state->menu, state->config->title); */
-/*       if (!state->initialized) { */
-/*         MenuConfig *config = state->config; */
-/*         /\* MenuConfig cfg = *config; *\/ */
-/*         LOG("Initializing menu [%s] for activation state (window: %p)", */
-/*             (config)->title, handler->root); */
-/*         state->menu = cairo_menu_create(handler->conn, *handler->root, */
-/*                                         state->config); // Use handler->root
- */
-/*         menu_manager_register(handler->menu_manager, state->menu); */
-/*         LOG("Menu created: %p Count :%ld\n", state->menu, */
-/*             menu_manager_get_menu_count(handler->menu_manager)); */
-
-/*         state->initialized = true; */
-/*         menu_manager_activate(handler->menu_manager, state->menu); */
-/*         LOG("Menu activated: %p", state->menu); */
-
-/*         /\* cairo_menu_render_show(state->menu->user_data); *\/ */
-/*         /\* state->menu->update_cb(state->menu, state->menu->user_data); *\/
- */
-/*       } */
-/*       return true; */
-/*     } */
-/*   } */
-/*   LOG("No activation state matched: mod_key=0x%x, keycode=%u", mod_key, */
-/*       keycode); */
-/*   return false; */
+/*   return true; */
 /* } */
 
 // Corrected activation logic (in your existing input handler)
-bool input_handler_handle_activation(InputHandler *handler, uint16_t mod_key,
-                                     uint8_t keycode) {
-  for (size_t i = 0; i < handler->activation_state_count; i++) {
-    ActivationState *state = &handler->activation_states[i];
-    LOG("Checking activation state: mod_key=0x%x, keycode=%u", state->mod_key,
+Menu *input_handler_handle_activation(InputHandler *handler, uint16_t mod_key,
+                                      uint8_t keycode) {
+  for (size_t i = 0; i < menu_manager_get_menu_count(handler->menu_manager);
+       i++) {
+    Menu *menu = menu_manager_menu_index(handler->menu_manager, i);
+    LOG("Checking activation state: mod_key=0x%x, keycode=%u", mod_key,
         keycode);
-    if (state->mod_key == mod_key && state->keycode == keycode) {
-      LOG("Activation state matched: mod_key=0x%x, keycode=%u", mod_key,
-          keycode);
-
-      LOG("Menu activating: %p", state->menu);
-      LOG("Handler->root: %p", handler->root);
-      LOG("Handler->conn: %p", handler->conn);
-      /* state->menu = cairo_menu_create(handler->conn, handler->screen->root,
-       */
-      /*                                 state->config); */
-
-      if (!state->menu || !state->menu->user_data) {
-        state->menu =
-            cairo_menu_create(handler->conn, *handler->root, handler->focus_ctx,
-                              handler->screen, state->config);
-      }
-      LOG("Menu activating: %p", state->menu);
-      if (!state->menu || !state->menu->user_data) {
-        fprintf(stderr, "Menu creation failed or user_data invalid\n");
-        return false;
-      }
-
-      LOG("Menu created: %p Count :%ld\n Connection %p RenderWindow %u",
-          state->menu, menu_manager_get_menu_count(handler->menu_manager),
-          handler->conn,
-          ((CairoMenuData *)state->menu->user_data)->render.window);
-      //&((CairoMenuRenderData *)state->menu->user_data)->window);
-      // Proper initialization here:
-
-      state->initialized = true;
-      menu_manager_register(handler->menu_manager, state->menu);
-      menu_manager_activate(handler->menu_manager, state->menu);
-      /* menu_show(state->menu); */
-      /* cairo_menu_show(state->menu->user_data); */
-      /* // Correct usage of show: */
-      /* cairo_menu_render_show((CairoMenuData *)state->menu->user_data); */
-
-      /* if (!state->initialized) { */
-      /*   state->menu = cairo_menu_create(handler->conn,
-       * handler->screen->root,
-       */
-      /*                                   state->config); */
-      /*   state->initialized = (state->menu != NULL); */
-      /*   if (state->initialized) { */
-      /*     LOG("Menu created: %p", state->menu); */
-      /*     menu_manager_register(handler->menu_manager, state->menu); */
-      /*     menu_manager_activate(handler->menu_manager, state->menu); */
-      /*     cairo_menu_show(state->menu->user_data); */
-      /*     cairo_menu_render_show(state->menu->user_data); */
-      /*   } */
-      /* } */
-      return true;
+    if (menu->config.mod_key == mod_key &&
+        menu->config.trigger_key == keycode) {
+      LOG("[%s] Activation state matched: mod_key=0x%x, keycode=%u",
+          menu->config.title, menu->config.mod_key, menu->config.trigger_key);
+      return menu;
     }
   }
-  return false;
+  return NULL;
+
+  /* if (m */
+  /*   LOG("Creating menu"); */
+  /*   state->menu = */
+  /*       menu_setup_cairo(handler->conn, *handler->root, handler->focus_ctx,
+   */
+  /*                        handler->screen, state->config); */
+  /*   if (!state->menu) { */
+  /*     fprintf(stderr, "Menu creation failed\n"); */
+  /*     return false; */
+  /*   } */
+  /*   LOG("Menu created: %p", state->menu); */
+  /*   menu_manager_register(handler->menu_manager, state->menu); */
+  /*   state->initialized = true; */
+  /* } */
+
+  /* LOG("Activating menu: %u", state->menu->state); */
+  /* menu_manager_activate(handler->menu_manager, state->menu); */
+  /* CairoMenuData *data = ((CairoMenuData *)state->menu->user_data); */
+  /* if (data) { */
+  /*   cairo_menu_render_show(data); // Show in top-right */
+  /* } */
 }

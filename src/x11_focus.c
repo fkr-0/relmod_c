@@ -24,15 +24,36 @@ X11FocusContext *x11_focus_init(xcb_connection_t *conn,
                                 xcb_ewmh_connection_t *ewmh) {
 
   X11FocusContext *ctx = calloc(1, sizeof(X11FocusContext));
+  if (!ctx) {
+    fprintf(stderr, "Failed to allocate X11FocusContext\n");
+    return NULL;
+  }
   ctx->conn = conn;
   ctx->ewmh = ewmh;
   ctx->previous_focus = XCB_NONE;
+
   return ctx;
 }
 
 void x11_focus_cleanup(X11FocusContext *ctx) {
-  if (ctx)
+  if (ctx) {
+    x11_release_inputs(ctx);
+    ctx->conn = NULL;
+    ctx->ewmh = NULL;
+    /* ctx->previous_focus = XCB_NONE; */
+    /* free(ctx->ewmh); */
+    /* if (ctx->conn) { */
+    /*   xcb_disconnect(ctx->conn); */
+    /* } */
     free(ctx);
+  }
+  /* if (ctx) { */
+  /*   ctx->conn = NULL; */
+  /*   ctx->ewmh = NULL; */
+  /*   ctx->previous_focus = XCB_NONE; */
+
+  /*   free(ctx); */
+  /* } */
 }
 
 void x11_set_window_floating(X11FocusContext *ctx, xcb_window_t window) {
@@ -53,6 +74,7 @@ void x11_set_window_floating(X11FocusContext *ctx, xcb_window_t window) {
   xcb_atom_t motif = get_atom(ctx->conn, "_MOTIF_WM_HINTS");
   xcb_change_property(ctx->conn, XCB_PROP_MODE_REPLACE, window, motif, motif,
                       32, 5, &hints);
+  /* free(motif); */
 }
 
 static void store_current_focus(X11FocusContext *ctx) {
