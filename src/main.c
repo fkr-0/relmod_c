@@ -1,14 +1,13 @@
 // ====================== FILE: main.c (safe minimal example) ==================
-#include "cairo_menu.h"
 #include "input_handler.h"
 #include "key_helper.h"
 #include "menu_builder.h"
 #include <stdio.h>
 #include <xcb/xcb.h>
 #ifdef MENU_DEBUG
-#include "log.h"
 #define LOG_PREFIX "[MAIN]"
 #endif
+#include "log.h"
 
 void demo_action(void *user_data) {
   printf("Menu item selected: %s\n", (char *)user_data);

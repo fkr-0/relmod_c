@@ -52,6 +52,29 @@ char *menu_manager_status_string(MenuManager *manager); // caller must free
 /* Registry iteration (internalized access) */
 typedef bool (*MenuManagerForEachFn)(Menu *menu, struct timeval *last_update,
                                      void *user_data);
+/* Iterate over all menus in the manager
+ * Usage: menu_manager_foreach(manager, fn, user_data)
+ * fn: MenuManagerForEachFn - callback function accepting Menu, timeval, void*
+ *     - return false to stop iteration
+ * user_data user_data: void* - user data to pass to callback
+ *
+ * Returns: void
+ *
+ * Example: find matching mod_key + keycode:
+ * pass ev from key press event and match mod_key + keycode
+ * bool fn(Menu *menu, struct timeval *last_update, void *user_data) {
+    *   xcb_key_press_event_t *ev = (xcb_key_press_event_t *)user_data;
+
+    *   if (menu->mod_key == ev->state && menu->trigger_key == ev->detail) {
+    *     menu_manager_activate(manager, menu) {
+    *     return false; // Stop iteration
+    *   }
+    * return true; // Continue iteration
+    * }
+    *
+    * xcb_key_press_event_t *ev = (xcb_key_press_event_t *)event;
+    * menu_manager_foreach(manager, fn, ev);
+ * */
 void menu_manager_foreach(MenuManager *manager, MenuManagerForEachFn fn,
                           void *user_data);
 

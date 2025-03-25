@@ -1,33 +1,185 @@
 #include "cairo_menu_render.h"
+#include "log.h"
 #include <cairo/cairo-xcb.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #ifdef MENU_DEBUG
 #define LOG_PREFIX "[CAIRO_MENU_RENDER]"
-#include "log.h"
 #endif
-// Helper: create popup window top-right
-/* static xcb_window_t create_popup(xcb_connection_t *conn, xcb_window_t root,
+/* Filename: cairo_menu_render_improvements.c */
+/* This file contains improved rendering functions for our Cairo-based UI menu.
+   Enhancements include:
+   - Anti-aliasing for smooth edges.
+   - Gradient background for a modern look.
+   - Rounded corners and drop shadows for selected items.
+   - Optional fade effect support for animation.
+*/
+
+/*-------------------------*/
+/* Utility Drawing Helpers */
+/*-------------------------*/
+
+/* Draw a rounded rectangle on the given Cairo context.
+   x, y: top-left coordinates.
+   width, height: dimensions of the rectangle.
+   radius: the corner radius.
+*/
+static void draw_rounded_rectangle(cairo_t *cr, double x, double y,
+                                   double width, double height, double radius) {
+  // Start a new sub-path for the rounded rectangle
+  cairo_new_sub_path(cr);
+  cairo_arc(cr, x + width - radius, y + radius, radius, -M_PI / 2, 0);
+  cairo_arc(cr, x + width - radius, y + height - radius, radius, 0, M_PI / 2);
+  cairo_arc(cr, x + radius, y + height - radius, radius, M_PI / 2, M_PI);
+  cairo_arc(cr, x + radius, y + radius, radius, M_PI, 3 * M_PI / 2);
+  cairo_close_path(cr);
+}
+
+/* Create a vertical gradient background.
+   This function creates a subtle gradient from a slightly darker top to the
+   base color.
+*/
+static void draw_gradient_background(cairo_t *cr, double width, double height,
+                                     const double color[4]) {
+  cairo_pattern_t *pattern = cairo_pattern_create_linear(0, 0, 0, height);
+  // Darker tone at the top for a slight depth effect
+  cairo_pattern_add_color_stop_rgba(pattern, 0, color[0] * 0.8, color[1] * 0.8,
+                                    color[2] * 0.8, color[3]);
+  cairo_pattern_add_color_stop_rgba(pattern, 1, color[0], color[1], color[2],
+                                    color[3]);
+  cairo_set_source(cr, pattern);
+  cairo_paint(cr);
+  cairo_pattern_destroy(pattern);
+}
+
+/* Draw a drop shadow for a rectangle.
+   This simulates a shadow by drawing an offset rounded rectangle with
+   transparency.
+*/
+static void draw_drop_shadow(cairo_t *cr, double x, double y, double width,
+                             double height, double radius, double shadow_offset,
+                             const double shadow_color[4]) {
+  cairo_save(cr);
+  cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+  cairo_set_source_rgba(cr, shadow_color[0], shadow_color[1], shadow_color[2],
+                        shadow_color[3]);
+  draw_rounded_rectangle(cr, x + shadow_offset, y + shadow_offset, width,
+                         height, radius);
+  cairo_fill(cr);
+  cairo_restore(cr);
+}
+
+/*-----------------------------*/
+/* Improved Rendering Routines */
+/*-----------------------------*/
+
+/* Clear the menu background using a gradient effect and smooth anti-aliasing.
  */
-/*                                  xcb_screen_t *screen, int w, int h) { */
+void cairo_menu_render_clear(CairoMenuData *data, const MenuStyle *style) {
+  cairo_t *cr = data->render.cr;
+  cairo_set_antialias(cr, CAIRO_ANTIALIAS_BEST);
+  draw_gradient_background(cr, data->render.width, data->render.height,
+                           style->background_color);
+}
 
-/*   int x = screen->width_in_pixels - w - 20; // Padding 20px */
-/*   int y = 20; */
+/* Render the title with an enhanced font and anti-aliased text.
+   The title is slightly larger and bolder.
+*/
+void cairo_menu_render_title(CairoMenuData *data, const char *title,
+                             const MenuStyle *style) {
+  cairo_t *cr = data->render.cr;
+  cairo_set_antialias(cr, CAIRO_ANTIALIAS_BEST);
+  // Use a bold face for the title
+  cairo_select_font_face(cr, style->font_face, CAIRO_FONT_SLANT_NORMAL,
+                         CAIRO_FONT_WEIGHT_BOLD);
+  cairo_set_font_size(cr, style->font_size * 1.1);
+  cairo_set_source_rgba(cr, style->text_color[0], style->text_color[1],
+                        style->text_color[2], style->text_color[3]);
+  double x = style->padding;
+  double y = style->padding + style->font_size;
+  cairo_move_to(cr, x, y);
+  cairo_show_text(cr, title);
+}
 
-/*   uint32_t mask = */
-/*       XCB_CW_BACK_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK; */
-/*   uint32_t vals[3] = {0, 1, XCB_EVENT_MASK_EXPOSURE}; */
+/* Render an individual menu item.
+   For a selected item, draw a drop shadow and a gradient-filled rounded
+   rectangle, then render the text in white.
+*/
+void cairo_menu_render_item(CairoMenuData *data, const MenuItem *item,
+                            const MenuStyle *style, bool is_selected,
+                            double y_position) {
+  cairo_t *cr = data->render.cr;
+  cairo_set_antialias(cr, CAIRO_ANTIALIAS_BEST);
 
-/*   xcb_window_t win = xcb_generate_id(conn); */
-/*   xcb_create_window(conn, XCB_COPY_FROM_PARENT, win, root, x, y, w, h, 1, */
-/*                     XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual, mask,
- */
-/*                     vals); */
-/*   xcb_map_window(conn, win); */
-/*   xcb_flush(conn); */
-/*   return win; */
-/* } */
+  double item_width = data->render.width - style->padding * 2;
+  double x = style->padding;
+  double radius = 6.0; // Rounded corner radius for modern UI
+
+  if (is_selected) {
+    // Draw a subtle drop shadow to give depth
+    double shadow_offset = 3.0;
+    double shadow_color[4] = {0, 0, 0, 0.3}; // Semi-transparent black
+    draw_drop_shadow(cr, x, y_position, item_width,
+                     style->item_height - style->padding, radius, shadow_offset,
+                     shadow_color);
+
+    // Draw the selected background with a gradient inside a rounded rectangle
+    cairo_save(cr);
+    cairo_translate(cr, x, y_position);
+    cairo_new_path(cr);
+    draw_rounded_rectangle(cr, 0, 0, item_width,
+                           style->item_height - style->padding, radius);
+    cairo_clip(cr);
+    cairo_pattern_t *pattern =
+        cairo_pattern_create_linear(0, 0, 0, style->item_height);
+    cairo_pattern_add_color_stop_rgba(
+        pattern, 0, style->highlight_color[0] * 1.2,
+        style->highlight_color[1] * 1.2, style->highlight_color[2] * 1.2,
+        style->highlight_color[3]);
+    cairo_pattern_add_color_stop_rgba(
+        pattern, 1, style->highlight_color[0], style->highlight_color[1],
+        style->highlight_color[2], style->highlight_color[3]);
+    cairo_set_source(cr, pattern);
+    cairo_paint(cr);
+    cairo_pattern_destroy(pattern);
+    cairo_restore(cr);
+
+    // Render the text in white to improve contrast on the highlighted
+    // background.
+    cairo_set_source_rgba(cr, 1, 1, 1, 1);
+  } else {
+    cairo_set_source_rgba(cr, style->text_color[0], style->text_color[1],
+                          style->text_color[2], style->text_color[3]);
+  }
+
+  cairo_move_to(cr, x + style->padding,
+                y_position + style->padding + style->font_size);
+  cairo_show_text(cr, item->label);
+}
+
+/*-------------------------*/
+/* Optional Animation Hook */
+/*-------------------------*/
+
+/* This function can be called during your animation update to apply a fade
+   effect. progress: a value between 0.0 (completely transparent) and 1.0 (fully
+   opaque). Call this after drawing the full menu to composite the fade effect.
+*/
+void cairo_menu_render_apply_fade(CairoMenuData *data, double progress) {
+  cairo_t *cr = data->render.cr;
+  cairo_paint_with_alpha(cr, progress);
+}
+
+/*
+  Integrate these functions with your existing animation code.
+  For example:
+    - During fade-in, gradually increase progress from 0.0 to 1.0.
+    - For slide animations, adjust the translation (using cairo_translate)
+      before rendering items.
+  This modular approach lets you mix and match various effects.
+*/
 /* Create menu window */
 static xcb_window_t create_window(xcb_connection_t *conn, xcb_window_t parent,
                                   X11FocusContext *ctx, xcb_screen_t *screen,
@@ -270,52 +422,56 @@ void cairo_menu_render_end(CairoMenuData *data) {
   xcb_flush(data->conn);
 }
 
-void cairo_menu_render_clear(CairoMenuData *data, const MenuStyle *style) {
-  printf("Rendering clear\n");
-  cairo_t *cr = data->render.cr;
+/* void cairo_menu_render_clear(CairoMenuData *data, const MenuStyle *style) {
+ */
+/*   printf("Rendering clear\n"); */
+/*   cairo_t *cr = data->render.cr; */
 
-  cairo_set_source_rgba(cr, style->background_color[0],
-                        style->background_color[1], style->background_color[2],
-                        style->background_color[3]);
-  cairo_paint(cr);
-}
+/*   cairo_set_source_rgba(cr, style->background_color[0], */
+/*                         style->background_color[1],
+ * style->background_color[2], */
+/*                         style->background_color[3]); */
+/*   cairo_paint(cr); */
+/* } */
 
 /* Menu content rendering */
-void cairo_menu_render_title(CairoMenuData *data, const char *title,
-                             const MenuStyle *style) {
-  printf("Rendering title: %s\n", title);
-  cairo_t *cr = data->render.cr;
+/* void cairo_menu_render_title(CairoMenuData *data, const char *title, */
+/*                              const MenuStyle *style) { */
+/*   printf("Rendering title: %s\n", title); */
+/*   cairo_t *cr = data->render.cr; */
 
-  cairo_set_source_rgba(cr, style->text_color[0], style->text_color[1],
-                        style->text_color[2], style->text_color[3]);
+/*   cairo_set_source_rgba(cr, style->text_color[0], style->text_color[1], */
+/*                         style->text_color[2], style->text_color[3]); */
 
-  cairo_move_to(cr, style->padding, style->padding + style->font_size);
-  cairo_show_text(cr, title);
-}
+/*   cairo_move_to(cr, style->padding, style->padding + style->font_size); */
+/*   cairo_show_text(cr, title); */
+/* } */
 
-void cairo_menu_render_item(CairoMenuData *data, const MenuItem *item,
-                            const MenuStyle *style, bool is_selected,
-                            double y_position) {
-  printf("Rendering item: %s\n", item->label);
-  cairo_t *cr = data->render.cr;
+/* void cairo_menu_render_item(CairoMenuData *data, const MenuItem *item, */
+/*                             const MenuStyle *style, bool is_selected, */
+/*                             double y_position) { */
+/*   printf("Rendering item: %s\n", item->label); */
+/*   cairo_t *cr = data->render.cr; */
 
-  /* Draw selection highlight */
-  if (is_selected) {
-    cairo_set_source_rgba(cr, style->highlight_color[0],
-                          style->highlight_color[1], style->highlight_color[2],
-                          style->highlight_color[3]);
-    cairo_rectangle(cr, 0, y_position, data->render.width, style->item_height);
-    cairo_fill(cr);
-    cairo_set_source_rgba(cr, 1, 1, 1, 1); /* White text for selected */
-  } else {
-    cairo_set_source_rgba(cr, style->text_color[0], style->text_color[1],
-                          style->text_color[2], style->text_color[3]);
-  }
+/*   /\* Draw selection highlight *\/ */
+/*   if (is_selected) { */
+/*     cairo_set_source_rgba(cr, style->highlight_color[0], */
+/*                           style->highlight_color[1],
+ * style->highlight_color[2], */
+/*                           style->highlight_color[3]); */
+/*     cairo_rectangle(cr, 0, y_position, data->render.width,
+ * style->item_height); */
+/*     cairo_fill(cr); */
+/*     cairo_set_source_rgba(cr, 1, 1, 1, 1); /\* White text for selected *\/ */
+/*   } else { */
+/*     cairo_set_source_rgba(cr, style->text_color[0], style->text_color[1], */
+/*                           style->text_color[2], style->text_color[3]); */
+/*   } */
 
-  cairo_move_to(cr, style->padding,
-                y_position + style->padding + style->font_size);
-  cairo_show_text(cr, item->label);
-}
+/*   cairo_move_to(cr, style->padding, */
+/*                 y_position + style->padding + style->font_size); */
+/*   cairo_show_text(cr, item->label); */
+/* } */
 
 void cairo_menu_render_items(CairoMenuData *data, const Menu *menu) {
   printf("Rendering items\n");
@@ -389,10 +545,11 @@ void cairo_menu_render_scale(CairoMenuData *data, double sx, double sy) {
   cairo_scale(data->render.cr, sx, sy);
 }
 
+/*  */
 void cairo_menu_render_set_opacity(CairoMenuData *data, double opacity) {
   cairo_push_group(data->render.cr);
   cairo_pop_group_to_source(data->render.cr);
-  cairo_paint_with_alpha(data->render.cr, 1.0); // opacity);
+  cairo_paint_with_alpha(data->render.cr, opacity);
 }
 
 /* Color operations */

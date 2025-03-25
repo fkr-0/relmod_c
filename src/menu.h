@@ -78,6 +78,26 @@ struct MenuConfig {
   ActivationState act_state;
 };
 
+/* Menu state
+ * Used to track the current state of the menu for the cases:
+ * - Inactive: Menu is not visible
+ * - Initializing: Menu is being set up (e.g. rendering)
+ * - Active: Menu is visible and active
+ * - Navigating: Menu is navigating items (not used)
+ * - Activating: Menu is activating an item
+ *
+ * The state is used to determine how to handle key events and rendering:
+ * - Inactive: No key events are handled, no rendering is done
+ * - Initializing: No key events are handled, rendering is done
+ * - Active: Key events are handled, rendering is done
+ * - Navigating: Key events are handled, rendering is done
+ * - Activating: No key events are handled, rendering is done
+ *
+ * Animations and other effects can be added based on the state, typically
+ * during rendering. We use the different states to separate the logic for
+ * handling key events and rendering.
+ * */
+
 typedef enum {
   MENU_STATE_INACTIVE,
   MENU_STATE_INITIALIZING,
@@ -90,16 +110,27 @@ typedef enum {
 struct Menu {
   MenuConfig config;
   MenuState state;
-  bool active;
-  int selected_index;
+  bool active;        // Is the menu active?(the menu receiving key events)
+  int selected_index; // Index of the selected item
 
-  void *user_data;
-  X11FocusContext *focus_ctx;
+  void *user_data; // User data pointer - can be used to store custom data
+  X11FocusContext *focus_ctx; // X11 focus context - gets passed along the
+                              // activation menu for handling focus events
 
-  bool (*activates_cb)(uint16_t, uint8_t, void *);
-  bool (*action_cb)(uint8_t, void *);
-  void (*cleanup_cb)(void *);
-  void (*update_cb)(Menu *, void *);
+  bool (*activates_cb)(
+      uint16_t, uint8_t,
+      void *); // Activation callback
+               // usage: activates_cb(mod_key, keycode, user_data)
+  bool (*action_cb)(uint8_t, void *); // Action callback
+                                      // usage: action_cb(keycode, user_data)
+  void (*cleanup_cb)(void *);         // Cleanup callback
+                                      // usage: cleanup_cb(user_data)
+  void (*update_cb)(Menu *, void *);  // Update callback
+                                      // usage: update_cb(menu, user_data)
+  // triggered onupdate_interval, user events
+  // Update interval in milliseconds - used to trigger update callback -0 to
+  // disable user events cause update callback to be triggered. update interval
+  // operates in the background and gets reset after each update/event
   unsigned int update_interval;
 };
 
@@ -123,5 +154,6 @@ void menu_set_update_interval(Menu *menu, unsigned int ms);
 void menu_set_update_callback(Menu *menu, void (*cb)(Menu *, void *));
 void menu_trigger_update(Menu *menu);
 void menu_redraw(Menu *menu);
-
+bool menu_cairo_is_setup(Menu *menu);
+void menu_confirm_selection(Menu *menu);
 #endif

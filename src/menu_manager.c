@@ -11,8 +11,8 @@
 
 #ifdef MENU_DEBUG
 #define LOG_PREFIX "[MANAGER]"
-#include "log.h"
 #endif
+#include "log.h"
 
 /* Registry entry */
 typedef struct MenuRegistryEntry {

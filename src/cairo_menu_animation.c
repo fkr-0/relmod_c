@@ -3,9 +3,9 @@
 #include <stdlib.h>
 #include <sys/time.h>
 
+#include "log.h"
 #ifdef MENU_DEBUG
 #define LOG_PREFIX "[CAIRO_MENU_ANIMATION]"
-#include "log.h"
 #endif
 
 /* Initialize animation data */

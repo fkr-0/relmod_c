@@ -4,14 +4,14 @@
 #include "cairo_menu.h"
 #include "cairo_menu_animation.h"
 #include "cairo_menu_render.h"
-#include "key_helper.h"
+#include "menu_animation.h"
 #include <stdlib.h>
 #include <string.h>
 #include <xcb/xcb.h>
 
+#include "log.h"
 #ifdef MENU_DEBUG
 #define LOG_PREFIX "[CAIRO_MENU]"
-#include "log.h"
 #endif
 
 Menu *menu_create(MenuConfig *config) {
@@ -43,10 +43,7 @@ void menu_show(Menu *menu) {
   }
   menu->active = true;
   menu->state = MENU_STATE_INITIALIZING;
-  /* if (menu->state != MENU_STATE_ACTIVE) { */
   LOG("Menu is inactive, setting state to initializing");
-  /* menu->state = MENU_STATE_INITIALIZING; */
-  /* cairo_menu_render_show(menu->user_data); */
 
   CairoMenuData *data = (CairoMenuData *)menu->user_data;
   if (!data) {
@@ -55,22 +52,29 @@ void menu_show(Menu *menu) {
   }
   cairo_menu_animation_init(data);
   /* LOG("Animations initialized successfully\n"); */
-  /* menu_set_update_interval(menu, 200); */
-  cairo_menu_animation_set_default(data, MENU_ANIM_FADE, MENU_ANIM_FADE, 200.0);
+  menu_set_update_interval(menu, 20);
+  cairo_menu_animation_set_default(data, MENU_ANIM_FADE, MENU_ANIM_FADE,
+                                   40000.0);
 
-  cairo_menu_render_scale(data, 1.2, 1.2);
-
+  /* cairo_menu_render_scale(data, 1.0, 1.0); */
+  cairo_menu_activate(menu);
+  /* cairo_menu_render_set_opacity(data, 0.5); */
   /* cairo_menu_animation_show(data, menu); */
+  /* menu_animation_create(MENU_ANIM_FADE, 4000.0); */
+  /* MenuAnimationSequence *seq = menu_animation_sequence_create(); */
+  /* menu_animation_sequence_add(seq, menu_animation_fade_in(40000)); */
+  /* cairo_menu_animation_set_sequence(data, true, seq); */
+  /* cairo_menu_animation_update(data, menu, 400000); */
   cairo_menu_render_show(data);
-  menu->state = MENU_STATE_ACTIVE;
-  /* cairo_menu_show(menu); */
-  cairo_menu_render_request_update(data);
-  menu_trigger_update(menu);
-  /* caiRo_menu_animation_set_sequence(data, true, NULL); */
-  /* data->anim.show_animation = menu_animation_fade_in(2); */
-  /* /\* cairo_menu_animation_show(data, menu); *\/ */
-  /* menu_trigger_update(menu); */
   /* menu->state = MENU_STATE_ACTIVE; */
+  cairo_menu_show(menu);
+  /* cairo_menu_render_request_update(data); */
+  /* menu_trigger_update(menu); */
+  /* cairo_menu_animation_apply(data, menu, data->render.cr); */
+  /* data->anim.show_animation = menu_animation_fade_in(8000); */
+  /* cairo_menu_animation_show(data, menu); */
+  /* menu_trigger_update(menu); */
+  /* /\* menu->state = MENU_STATE_ACTIVE; *\/ */
   /* menu_trigger_update(menu); */
   /* menu_redraw(menu); */
   /* } */
@@ -107,7 +111,17 @@ bool menu_handle_key_press(Menu *menu, xcb_key_press_event_t *ev) {
     menu_select_prev(menu);
     return false;
   }
-
+  // keycode 1-9: int 10-18
+  if (ev->detail >= 10 && ev->detail <= 18) {
+    if (ev->detail - 10 < (int)menu->config.item_count) {
+      LOG("Selecting item by direct key");
+      menu_select_index(menu, ev->detail - 10);
+      return false;
+    } else {
+      LOG("Invalid direct key");
+    }
+    return false;
+  }
   if (menu->config.act.activate_on_direct_key) {
     for (size_t i = 0; i < nav->direct.count; i++) {
       if (ev->detail == nav->direct.keys[i]) {
@@ -120,53 +134,26 @@ bool menu_handle_key_press(Menu *menu, xcb_key_press_event_t *ev) {
   return menu->action_cb ? menu->action_cb(ev->detail, menu->user_data) : false;
 }
 
-bool menu_handle_key_release(Menu *menu, xcb_key_release_event_t *ev) {
-  LOG("Key release %d %d [%s]", ev->detail, ev->state, menu->config.title);
-  if (!menu || !ev)
-    return false;
+void menu_confirm_selection(Menu *menu) {
+  MenuItem *item = menu_get_selected_item(menu);
+  if (item && item->action) {
 
-  if (menu->config.act.activate_on_mod_release &&
-      menu->config.act_state.mod_key == key_mod(ev->detail)) {
-    LOG("[%s][%d/%d] ReleaseActionActivating menu on mod", menu->config.title,
-        menu->selected_index, menu->config.item_count);
-    MenuItem *item = menu_get_selected_item(menu);
-    if (item && item->action) {
+    // Check if the item's action is valid
+    // Prepare the data for the action
+    const char *d = (const char *)item->metadata;
+    void *data = d ? (void *)d : menu->user_data;
 
-      // Check if the item is valid
-      if (!item) {
-        LOG("No selected item found");
-        return true;
-      }
+    // Log the action call
+    LOG("Calling action for item: %s", d ? d : "no metadata");
 
-      // Check if the item's action is valid
-      if (!item->action) {
-        LOG("Selected item has no action");
-        return true;
-      }
+    // Execute the action
+    item->action(data);
 
-      // Prepare the data for the action
-      const char *d = (const char *)item->metadata;
-      void *data = d ? (void *)d : menu->user_data;
+    // Log the action completion
+    LOG("Action called");
 
-      // Log the action call
-      LOG("Calling action for item: %s", d ? d : "no metadata");
-
-      // Execute the action
-      item->action(data);
-
-      // Log the action completion
-      LOG("Action called");
-      return false;
-      /* const char *d = (const char *)item->metadata; */
-      /* void *data = d ? (void *)d : menu->user_data; */
-      /* item->action(data); */
-      /* LOG("Action called"); */
-      /* return false; */
-    }
+  } else
     LOG("Action not called");
-  }
-  LOG("NOOP");
-  return true;
 }
 
 void menu_destroy(Menu *menu) {

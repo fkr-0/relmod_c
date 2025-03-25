@@ -1,7 +1,7 @@
 /* input_handler.c - Complete and updated Input handling implementation */
 #include "input_handler.h"
-#include "cairo_menu.h"        // Include cairo_menu.h for menu_setup_cairo
-#include "cairo_menu_render.h" // Include cairo_menu.h for menu_setup_cairo
+#include "cairo_menu.h" // Include cairo_menu.h for menu_setup_cairo
+#include "log.h"
 #include "menu_manager.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,7 +11,6 @@
 
 #ifdef MENU_DEBUG
 #define LOG_PREFIX "[INPUT]"
-#include "log.h"
 #endif
 
 static bool is_modifier_release(uint16_t state, uint8_t keycode) {
@@ -20,6 +19,19 @@ static bool is_modifier_release(uint16_t state, uint8_t keycode) {
          (state == 0x04 && keycode == 37) ||  // Ctrl
          (state == 0x01 && keycode == 50);    // Shift
 }
+
+/* static bool match_key(Menu *menu, struct timeval *last_update, */
+/*                       void *user_data) { */
+/*   xcb_key_press_event_t *ev = (xcb_key_press_event_t *)user_data; */
+
+/*   if (menu->config.mod_key == ev->state && */
+/*       menu->config.trigger_key == ev->detail) { */
+/*     menu_manager_activate(manager, menu) { */
+/*       return false; // Stop iteration */
+/*     } */
+/*     return true; // Continue iteration */
+/*   } */
+/* } */
 
 InputHandler *input_handler_create() {
   InputHandler *handler = calloc(1, sizeof(InputHandler));
@@ -143,11 +155,14 @@ fail_conn:
 /*   } */
 /*   LOG("[XCB] Connected to X server"); */
 
-/*   xcb_screen_t *screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
+/*   xcb_screen_t *screen =
+ * xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
  */
 /*   xcb_window_t root = screen->root; */
-/*   xcb_ewmh_connection_t *ewmh = calloc(1, sizeof(xcb_ewmh_connection_t)); */
-/*   if (!xcb_ewmh_init_atoms_replies(ewmh, xcb_ewmh_init_atoms(conn, ewmh), */
+/*   xcb_ewmh_connection_t *ewmh = calloc(1, sizeof(xcb_ewmh_connection_t));
+ */
+/*   if (!xcb_ewmh_init_atoms_replies(ewmh, xcb_ewmh_init_atoms(conn, ewmh),
+ */
 /*                                    NULL)) { */
 /*     LOG("[ERROR] Failed to initialize EWMH"); */
 /*     xcb_ewmh_connection_wipe(ewmh); */
@@ -406,6 +421,7 @@ bool input_handler_handle_event(InputHandler *handler,
     if (is_modifier_release(kr->state, kr->detail)) {
       LOG("[IH-RELEASE] Exiting because modifier release");
       if (handler->menu_manager->active_menu) {
+        menu_confirm_selection(handler->menu_manager->active_menu);
         menu_manager_deactivate(handler->menu_manager);
       }
       return true;

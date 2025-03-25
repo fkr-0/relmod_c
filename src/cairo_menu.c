@@ -8,9 +8,9 @@
 #include <string.h>
 #include <sys/time.h>
 
+#include "log.h"
 #ifdef MENU_DEBUG
 #define LOG_PREFIX "[CAIRO_MENU]"
-#include "log.h"
 #endif
 /* Forward declarations */
 static void cairo_menu_cleanup(void *user_data);
@@ -113,7 +113,6 @@ static void cairo_menu_cleanup(void *user_data) {
   CairoMenuData *data = (CairoMenuData *)user_data;
   if (!data)
     return;
-
   cairo_menu_animation_cleanup(data);
   cairo_menu_render_cleanup(data);
   free(data);
@@ -247,17 +246,5 @@ void cairo_menu_show(Menu *menu) {
   menu->active = true;
   /* menu->state = MENU_STATE_ACTIVATING; */
   cairo_menu_update(menu, menu->user_data);
-
-  /* double duration = 200.0; */
-  /* for (size_t i = 0; i < 1000; i++) { */
-  /*   if (menu->update_interval > 0 && menu->update_cb) */
-  /*     menu_trigger_update(menu); */
-  /* } */
-  /* /\* while (duration > 0.0) { *\/ */
-  /* cairo_menu_animation_update(NULL, menu, duration); */
-  /*   duration -= 10.0; */
-  /* } */
-  /* while (menu->state == MENU_STATE_INITIALIZING) { */
-  /* cairo_menu_update(menu, menu->user_data); */
-  /* } */
+  cairo_menu_render_request_update(menu->user_data);
 }
