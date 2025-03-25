@@ -53,20 +53,19 @@ void menu_show(Menu *menu) {
     LOG("No user data found");
     return;
   }
-  /* cairo_menu_animation_init(data); */
+  cairo_menu_animation_init(data);
   /* LOG("Animations initialized successfully\n"); */
   /* menu_set_update_interval(menu, 200); */
-  /* cairo_menu_animation_set_default(data, MENU_ANIM_FADE,
-   * MENU_ANIM_FADE, */
-  /*                                  20.0); */
+  cairo_menu_animation_set_default(data, MENU_ANIM_FADE, MENU_ANIM_FADE, 200.0);
 
-  /* cairo_menu_render_scale(data, 3.0, 3.0); */
+  cairo_menu_render_scale(data, 1.2, 1.2);
 
-  cairo_menu_animation_show(data, menu);
+  /* cairo_menu_animation_show(data, menu); */
   cairo_menu_render_show(data);
   menu->state = MENU_STATE_ACTIVE;
   /* cairo_menu_show(menu); */
-  /* cairo_menu_render_request_update(data); */
+  cairo_menu_render_request_update(data);
+  menu_trigger_update(menu);
   /* caiRo_menu_animation_set_sequence(data, true, NULL); */
   /* data->anim.show_animation = menu_animation_fade_in(2); */
   /* /\* cairo_menu_animation_show(data, menu); *\/ */
@@ -210,12 +209,14 @@ void menu_select_prev(Menu *menu) {
                          menu->config.item_count;
   LOG("[%s][%d/%d] Select prev", menu->config.title, menu->selected_index,
       menu->config.item_count);
+  menu_trigger_update(menu);
 }
 
 void menu_select_index(Menu *menu, int index) {
   if (!menu || index < 0 || (size_t)index >= menu->config.item_count)
     return;
   menu->selected_index = index;
+  menu_trigger_update(menu);
 }
 
 bool menu_is_active(Menu *menu) { return menu ? menu->active : false; }

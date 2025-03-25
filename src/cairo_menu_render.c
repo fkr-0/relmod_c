@@ -97,24 +97,6 @@ bool cairo_menu_render_init(CairoMenuData *data, xcb_connection_t *conn,
   render->window =
       create_window(conn, parent, ctx, screen, render->width, render->height);
   LOG("Creating window: %d", render->window); // Add debug print
-  /* screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data; */
-  /* xcb_depth_iterator_t depth_iter =
-   * xcb_screen_allowed_depths_iterator(screen); */
-  /* visual = NULL; */
-
-  /* for (; depth_iter.rem; xcb_depth_next(&depth_iter)) { */
-  /*   xcb_visualtype_iterator_t visual_iter = */
-  /*       xcb_depth_visuals_iterator(depth_iter.data); */
-  /*   for (; visual_iter.rem; xcb_visualtype_next(&visual_iter)) { */
-  /*     if (screen->root_visual == visual_iter.data->visual_id) { */
-  /*       visual = visual_iter.data; */
-  /*       break; */
-  /*     } */
-  /*   } */
-  /*   if (visual != NULL) */
-  /*     break; */
-  /* } */
-
   if (render->window == XCB_NONE) {
     printf("Failed to create window\n");
     return false;

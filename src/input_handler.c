@@ -372,7 +372,6 @@ bool input_handler_handle_event(InputHandler *handler,
         if (menu_handle_key_press(handler->menu_manager->active_menu, kp)) {
           return true;
         }
-        /* handler->menu_manager->active_menu */
       }
       Menu *menu_to_activate =
           input_handler_handle_activation(handler, kp->state, kp->detail);
@@ -402,18 +401,10 @@ bool input_handler_handle_event(InputHandler *handler,
     LOG("[IH-RELEASE]  release: code=%u, state=0x%x, globstate=0x%x",
         kr->detail, kr->state, handler->modifier_mask);
 
-    /* if (handler->modifier_mask == 0 && kr->state != 0) { */
-    /*   handler->modifier_mask = kr->state; */
-    /*   LOG("[IH-RELEASE]  set glob state because was 0: code=%u, state=0x%x, "
-     */
-    /*       "globstate=0x%x", */
-    /*       kr->detail, kr->state, handler->modifier_mask); */
-    /* } */
-
-    LOG("[IH-RELEASE] PASS event TO MENU MANAGER");
     /* menu_manager_handle_key_release(handler->menu_manager, kr); TODO maybe
      * later*/
     if (is_modifier_release(kr->state, kr->detail)) {
+      LOG("[IH-RELEASE] Exiting because modifier release");
       if (handler->menu_manager->active_menu) {
         menu_manager_deactivate(handler->menu_manager);
       }
@@ -433,22 +424,11 @@ bool input_handler_add_menu(InputHandler *handler, MenuConfig *config) {
     return false;
   LOG("[HANDLER->MANAGER] Adding menu: [%s]", config->title);
   menu_manager_register(handler->menu_manager, menu_create(config));
-  // free (config)?
-  /* ActivationState state = config->act_state; */
-  /* menu_setup_cairo(handler->conn, *handler->root, handler->focus_ctx, */
-  /*                  handler->screen, config); */
-  /* if (!state.menu) { */
-  /*   fprintf(stderr, "Menu creation failed\n"); */
-  /*   return false; */
-  /* } */
-  /* printf("Menu created: %p\n", state.menu); */
-  /* input_handler_add_activation_state(handler, &state); */
-  /* printf("Added activation state: mod_key=0x%x, keycode=%u\n", state.mod_key,
-   */
-  /*        state.keycode); */
+  // TODO free (config)?
   return true;
 }
 
+// TODO any use?
 /* bool input_handler_remove_menu(InputHandler *handler, Menu *menu) { */
 /*   if (!handler || !menu) */
 /*     return false; */
@@ -456,24 +436,6 @@ bool input_handler_add_menu(InputHandler *handler, MenuConfig *config) {
 /*   menu_manager_unregister(handler->menu_manager, menu); */
 /*   return true; */
 /* } */
-
-/* bool input_handler_add_activation_state(InputHandler *handler, */
-/*                                         ActivationState *state) { */
-/*   if (!handler || !state) */
-/*     return false; */
-/*   handler->activation_states = */
-/*       realloc(handler->activation_states, */
-/*               sizeof(ActivationState) * (handler->activation_state_count +
- * 1)); */
-/*   if (!handler->activation_states) */
-/*     return false; */
-/*   handler->activation_state_count++; */
-/*   handler->activation_states[handler->activation_state_count - 1] = *state;
- */
-/*   return true; */
-/* } */
-
-// Corrected activation logic (in your existing input handler)
 Menu *input_handler_handle_activation(InputHandler *handler, uint16_t mod_key,
                                       uint8_t keycode) {
   for (size_t i = 0; i < menu_manager_get_menu_count(handler->menu_manager);
@@ -489,26 +451,4 @@ Menu *input_handler_handle_activation(InputHandler *handler, uint16_t mod_key,
     }
   }
   return NULL;
-
-  /* if (m */
-  /*   LOG("Creating menu"); */
-  /*   state->menu = */
-  /*       menu_setup_cairo(handler->conn, *handler->root, handler->focus_ctx,
-   */
-  /*                        handler->screen, state->config); */
-  /*   if (!state->menu) { */
-  /*     fprintf(stderr, "Menu creation failed\n"); */
-  /*     return false; */
-  /*   } */
-  /*   LOG("Menu created: %p", state->menu); */
-  /*   menu_manager_register(handler->menu_manager, state->menu); */
-  /*   state->initialized = true; */
-  /* } */
-
-  /* LOG("Activating menu: %u", state->menu->state); */
-  /* menu_manager_activate(handler->menu_manager, state->menu); */
-  /* CairoMenuData *data = ((CairoMenuData *)state->menu->user_data); */
-  /* if (data) { */
-  /*   cairo_menu_render_show(data); // Show in top-right */
-  /* } */
 }

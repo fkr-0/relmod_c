@@ -155,48 +155,6 @@ void menu_manager_unregister(MenuManager *mgr, Menu *menu) {
   }
 }
 
-bool menu_manager_handle_key_press(MenuManager *mgr,
-                                   xcb_key_press_event_t *event) {
-  if (!mgr || !event) {
-    LOG("Menu manager MGR or EVENT is null\n");
-    return true;
-  }
-  if (mgr->active_menu) {
-    LOG("Passing event to active menu %s", mgr->active_menu->config.title);
-    return menu_handle_key_press(mgr->active_menu, event);
-  } else {
-    LOG("No active menu, checking registry\n");
-  }
-
-  MenuRegistryEntry *entry = (MenuRegistryEntry *)mgr->registry;
-  while (entry) {
-    if (entry->menu->activates_cb &&
-        entry->menu->activates_cb(event->state, event->detail,
-                                  entry->menu->user_data)) {
-      LOG("Activating menu on key press/callback: %s",
-          entry->menu->config.title);
-      return menu_manager_activate(mgr, entry->menu);
-    } else if (entry->menu->config.act.activate_on_mod_release &&
-               entry->menu->config.mod_key == event->state) {
-      LOG("Activating menu on mod: %s", entry->menu->config.title);
-      return menu_manager_activate(mgr, entry->menu);
-    }
-    entry = entry->next;
-  }
-  return false;
-}
-
-bool menu_manager_handle_key_release(MenuManager *mgr,
-                                     xcb_key_release_event_t *event) {
-  if (!mgr || !event)
-    return false;
-  LOG("Key release %d %d %p", event->detail, event->state, mgr->active_menu);
-  if (mgr->active_menu && !menu_handle_key_release(mgr->active_menu, event)) {
-    menu_manager_deactivate(mgr);
-    return true;
-  }
-  return false;
-}
 bool menu_manager_activate(MenuManager *mgr, Menu *menu) {
   if (!mgr || !menu)
     return true;
@@ -207,12 +165,6 @@ bool menu_manager_activate(MenuManager *mgr, Menu *menu) {
   }
 
   LOG("Activating menu: %s", menu->config.title);
-  // Deactivate any existing active menu
-  /* if (mgr->active_menu && mgr->active_menu != menu) { */
-  /*   LOG("Deactivating existing active menu: %s", */
-  /*       mgr->active_menu->config.title); */
-  /*   menu_manager_deactivate(mgr); */
-  /* } */
   mgr->active_menu = menu;
 
   // Inject the X11FocusContext before showing the menu
@@ -241,7 +193,7 @@ bool menu_manager_activate(MenuManager *mgr, Menu *menu) {
 void menu_manager_deactivate(MenuManager *mgr) {
   if (!mgr || !mgr->active_menu)
     return;
-  LOG("Deactivated menu: %s", mgr->active_menu->config.title);
+  LOG("Deactivating menu: %s", mgr->active_menu->config.title);
   menu_hide(mgr->active_menu);
   /* cairo_menu_deactivate(mgr->active_menu); */
   mgr->active_menu = NULL;
