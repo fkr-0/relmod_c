@@ -1,31 +1,69 @@
+# CircleCI configuration file to:
+#   - Run tests and generate coverage on push events.
+#   - Build a release when a new semantic version tag is pushed.
+#
+# The configuration uses CircleCI's Docker executor with the latest GCC image.
+# It installs required dependencies (lcov and genhtml) for coverage reporting.
+#
 version: 2.1
 
-executors:
-  default:
-    docker:
-      - image: circleci/gcc:latest
-
 jobs:
-  build:
-    executor: default
+  build_and_test:
+    docker:
+      - image: cimg/gcc:latest # Use the official CircleCI GCC image
     steps:
       - checkout
       - run:
-          name: Install Dependencies
+          name: Install dependencies
           command: |
-            apt-get update
-            apt-get install -y libxcb1-dev libcairo2-dev
+            sudo apt-get update
+            sudo apt-get install -y lcov genhtml
       - run:
-          name: Build Project
-          command: make
+          name: Clean previous builds
+          command: make clean
       - run:
-          name: Run Tests
+          name: Build Debug and Run Tests
           command: |
-            ./test_cairo_menu_render
-            ./test_cairo_menu_animation
+            make debug
+            make tests
+      - run:
+          name: Generate Test Coverage Report
+          command: make test-coverage
+      - store_artifacts:
+          path: coverage
+          destination: coverage
+
+  build_release:
+    docker:
+      - image: cimg/gcc:latest
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y lcov genhtml
+      - run:
+          name: Clean previous builds
+          command: make clean
+      - run:
+          name: Build Release Version
+          command: make release
+      - store_artifacts:
+          path: menu_system
+          destination: binary
 
 workflows:
   version: 2
-  build_and_test:
+  build_and_release:
     jobs:
-      - build
+      - build_and_test:
+          filters:
+            tags:
+              ignore: /.*/ # Run this job on branch pushes only
+      - build_release:
+          filters:
+            branches:
+              ignore: /.*/ # Run this job only on tagged commits
+            tags:
+              only: /^v[0-9]+\.[0-9]+\.[0-9]+$$/
