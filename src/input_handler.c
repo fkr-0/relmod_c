@@ -255,12 +255,21 @@ void input_handler_destroy(InputHandler *handler) {
   /* if (handler->screen) { */
 
   /* } */
+  LOG("[DESTROY] Destroying input handler:conn");
   if (handler->conn) {
-    xcb_disconnect(handler->conn);
+    // valid connection?
+    if (xcb_connection_has_error(handler->conn)) {
+      LOG("[DESTROY] Connection error detected");
+    } else {
+
+      xcb_disconnect(handler->conn);
+    }
   }
+  LOG("[DESTROY] Destroying input handler:activation");
   if (handler->activation_states) {
     free(handler->activation_states);
   }
+  LOG("[DESTROY] Destroying input handler:handler");
   if (handler)
     free(handler);
 }
@@ -346,6 +355,7 @@ bool input_handler_handle_event(InputHandler *handler,
     if (kp->detail == 9 || kp->detail == 24) {
       LOG("[IH-PRESS] Exit because esc/q | Modifier mask: 0x%x", kp->state);
       if (handler->menu_manager->active_menu) {
+        menu_cancel(handler->menu_manager->active_menu);
         menu_manager_deactivate(handler->menu_manager);
       }
       return true; // ESC or 'q'

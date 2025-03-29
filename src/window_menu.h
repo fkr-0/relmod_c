@@ -17,8 +17,8 @@ typedef struct {
 
 // Creates a window menu using the working menu.h API.
 // The created menu is built from the current WindowList.
-WindowMenu *window_menu_create(xcb_connection_t *conn, uint16_t modifier_mask,
-                               WindowList *window_list);
+WindowMenu *window_menu_create(xcb_connection_t *conn, WindowList *window_list,
+                               uint16_t modifier_mask, uint8_t trigger_key);
 
 // Returns the currently selected window id from the menu.
 xcb_window_t window_menu_get_selected(WindowMenu *wm);

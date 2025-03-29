@@ -183,6 +183,31 @@ static void draw_drop_shadow(cairo_t *cr, double x, double y, double width,
   cairo_restore(cr);
 }
 
+/* Draw a highlight effect for a rectangle.
+   This function creates a subtle highlight effect by drawing a gradient-filled
+   rounded rectangle.
+*/
+static void draw_highlight_effect(cairo_t *cr, double x, double y, double width,
+                                  double height, double radius,
+                                  const double highlight_color[4]) {
+  cairo_save(cr);
+  cairo_translate(cr, x, y);
+  cairo_new_path(cr);
+  draw_rounded_rectangle(cr, 0, 0, width, height, radius);
+  cairo_clip(cr);
+  cairo_pattern_t *pattern = cairo_pattern_create_linear(0, 0, 0, height);
+  cairo_pattern_add_color_stop_rgba(
+      pattern, 0, highlight_color[0] * 1.2, highlight_color[1] * 1.2,
+      highlight_color[2] * 1.2, highlight_color[3]);
+  cairo_pattern_add_color_stop_rgba(pattern, 1, highlight_color[0],
+                                    highlight_color[1], highlight_color[2],
+                                    highlight_color[3]);
+  cairo_set_source(cr, pattern);
+  cairo_paint(cr);
+  cairo_pattern_destroy(pattern);
+  cairo_restore(cr);
+}
+
 /*-----------------------------*/
 /* Improved Rendering Routines */
 /*-----------------------------*/
@@ -229,10 +254,17 @@ void cairo_menu_render_item(CairoMenuData *data, const MenuItem *item,
   double x = style->padding;
   double radius = 6.0; // Rounded corner radius for modern UI
 
+  // add nuance to the selected item
+  double nuance_intensity = 0.2;
+  double nuance_color[4] = {0.3, 0.3, 0.3, 0.1}; // Semi-transparent black
+  draw_highlight_effect(cr, x, y_position, item_width,
+                        style->item_height - style->padding, radius,
+                        nuance_color);
+  cairo_menu_render_set_opacity(data, 0.1);
   if (is_selected) {
     // Draw a subtle drop shadow to give depth
     double shadow_offset = 3.0;
-    double shadow_color[4] = {0, 0, 0, 0.3}; // Semi-transparent black
+    double shadow_color[4] = {0, 0, 0, 0.4}; // Semi-transparent black
     draw_drop_shadow(cr, x, y_position, item_width,
                      style->item_height - style->padding, radius, shadow_offset,
                      shadow_color);
@@ -279,6 +311,25 @@ void cairo_menu_render_item(CairoMenuData *data, const MenuItem *item,
 /* This function can be called during your animation update to apply a fade
    effect. progress: a value between 0.0 (completely transparent) and 1.0 (fully
    opaque). Call this after drawing the full menu to composite the fade effect.
+   Usage:
+     - During fade-in, gradually increase progress from 0.0 to 1.0.
+     - For slide animations, adjust the translation (using cairo_translate)
+       before rendering items.
+    This modular approach lets you mix and match various effects.
+
+   Example:
+     void my_animation_update(CairoMenuData *data, double progress) {
+       cairo_menu_render_clear(data, &style);
+       cairo_menu_render_title(data, "My Menu", &style);
+       for (size_t i = 0; i < item_count; i++) {
+         cairo_menu_render_item(data, &items[i], &style, i == selected_index,
+                                y_position);
+       }
+       cairo_menu_render_apply_fade(data, progress);
+     }
+
+    This function should be called after rendering the full menu to apply the
+    fade effect.
 */
 void cairo_menu_render_apply_fade(CairoMenuData *data, double progress) {
   cairo_t *cr = data->render.cr;
@@ -557,6 +608,7 @@ void cairo_menu_render_show(CairoMenuData *data) {
                        (const uint32_t[]){x, y, min_width, height});
   cairo_menu_render_resize(data, min_width, height);
 }
+
 void cairo_menu_render_hide(CairoMenuData *data) {
   xcb_unmap_window(data->conn, data->render.window);
   xcb_flush(data->conn);

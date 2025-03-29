@@ -262,6 +262,24 @@ void window_list_update(WindowList *list, xcb_connection_t *conn) {
   xcb_ewmh_connection_wipe(&ewmh);
 }
 
+/* Filter the window list based on the given filter function.
+ * The filter function should return true if the window should be included in
+ * the filtered list, and false otherwise.
+ * Arguments:
+ * - list: The window list to filter [WindowList *]
+ * - filter: The filter function [WindowFilterFn]
+ * Returns:
+ * - A new window list containing only the windows that passed the filter
+ * [WindowList *]
+ * - NULL on error
+ * Example:
+ *  SubstringFilterData filter_data = {.substring = "Firefox"};
+ * WindowList *filtered = window_list_filter(list, window_filter_substring,
+ * &filter_data);
+ *
+ * filtered in the example only contains windows with "Firefox" in the title.
+ * The caller is responsible for freeing the returned list.
+ */
 WindowList *window_list_filter(const WindowList *list, WindowFilterFn filter,
                                const void *filter_data) {
   WindowList *filtered = malloc(sizeof(WindowList));
@@ -298,6 +316,26 @@ WindowList *window_list_filter(const WindowList *list, WindowFilterFn filter,
 bool window_filter_substring(const X11Window *window, const void *data) {
   const SubstringFilterData *filter_data = data;
   return strstr(window->title, filter_data->substring) != NULL;
+}
+
+bool window_filter_substrings_any(const X11Window *window, const void *data) {
+  const SubstringsFilterData *filter_data = data;
+  for (size_t i = 0; i < filter_data->substring_count; i++) {
+    if (strstr(window->title, filter_data->substrings[i]) != NULL) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool window_filter_substrings_all(const X11Window *window, const void *data) {
+  const SubstringsFilterData *filter_data = data;
+  for (size_t i = 0; i < filter_data->substring_count; i++) {
+    if (strstr(window->title, filter_data->substrings[i]) == NULL) {
+      return false;
+    }
+  }
+  return true;
 }
 
 void window_focus(xcb_connection_t *conn, xcb_window_t window) {

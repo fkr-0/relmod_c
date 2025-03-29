@@ -37,7 +37,8 @@ void window_menu_on_select(MenuItem *item, void *user_data) {
 }
 
 // Helper: (Re)builds the MenuConfig items from the current WindowList.
-static MenuConfig build_menu_config(WindowMenu *wm, uint16_t modifier_mask) {
+static MenuConfig build_menu_config(WindowMenu *wm, uint16_t modifier_mask,
+                                    uint8_t trigger_key) {
   MenuBuilder builder =
       menu_builder_create("Window Menu", wm->window_list->count);
   for (size_t i = 0; i < wm->window_list->count; i++) {
@@ -51,7 +52,7 @@ static MenuConfig build_menu_config(WindowMenu *wm, uint16_t modifier_mask) {
                           win_ptr);
   }
 
-  menu_builder_set_trigger_key(&builder, 31);
+  menu_builder_set_trigger_key(&builder, trigger_key);
   menu_builder_set_mod_key(&builder, modifier_mask);
   menu_builder_set_navigation_keys(&builder, 44, "j", 45, "k", NULL, 0); // j, k
   menu_builder_set_activation(&builder, true, true);
@@ -60,8 +61,8 @@ static MenuConfig build_menu_config(WindowMenu *wm, uint16_t modifier_mask) {
   return *config;
 }
 
-WindowMenu *window_menu_create(xcb_connection_t *conn, uint16_t modifier_mask,
-                               WindowList *window_list) {
+WindowMenu *window_menu_create(xcb_connection_t *conn, WindowList *window_list,
+                               uint16_t modifier_mask, uint8_t trigger_key) {
   // Allocate the WindowMenu structure.
   WindowMenu *wm = calloc(1, sizeof(WindowMenu));
   if (!wm) {
@@ -72,7 +73,7 @@ WindowMenu *window_menu_create(xcb_connection_t *conn, uint16_t modifier_mask,
   wm->window_list = window_list;
 
   // Build the MenuConfig from the window list.
-  MenuConfig config = build_menu_config(wm, modifier_mask);
+  MenuConfig config = build_menu_config(wm, modifier_mask, trigger_key);
 
   // Create the menu using the working menu.h API.
   wm->menu = menu_create(&config);

@@ -36,11 +36,6 @@ bool menu_manager_register(MenuManager *manager, Menu *menu);
 Menu *menu_manager_menu_index(MenuManager *manager, size_t index);
 void menu_manager_unregister(MenuManager *manager, Menu *menu);
 
-bool menu_manager_handle_key_press(MenuManager *manager,
-                                   xcb_key_press_event_t *event);
-bool menu_manager_handle_key_release(MenuManager *manager,
-                                     xcb_key_release_event_t *event);
-
 bool menu_manager_activate(MenuManager *manager, Menu *menu);
 void menu_manager_deactivate(MenuManager *manager);
 Menu *menu_manager_get_active(MenuManager *manager);

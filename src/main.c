@@ -26,7 +26,7 @@ MenuConfig *create_menu_config(void) {
   menu_builder_add_item(&builder, "Item 3", demo_action, "item3");
 
   menu_builder_set_mod_key(&builder, XCB_MOD_MASK_4); // Super key
-  menu_builder_set_trigger_key(&builder, 32);         // Space key
+  /* menu_builder_set_trigger_key(&builder, 32);         // Space key */
   /* menu_builder_set_navigation_keys(MenuBuilder *builder, uint8_t next_key,
    * const char *next_label, uint8_t prev_key, const char *prev_label, uint8_t
    * *direct_keys, size_t direct_count) */
@@ -39,7 +39,8 @@ MenuConfig *create_menu_config(void) {
   menu_builder_destroy(&builder);
   return config;
 }
-static MenuConfig rebuild_menu_config(WindowMenu *wm, uint16_t modifier_mask) {
+static MenuConfig rebuild_menu_config(WindowMenu *wm, uint16_t mod_key,
+                                      uint8_t trigger_key) {
   MenuBuilder builder =
       menu_builder_create("Window Menu", wm->window_list->count);
   for (size_t i = 0; i < wm->window_list->count; i++) {
@@ -53,8 +54,8 @@ static MenuConfig rebuild_menu_config(WindowMenu *wm, uint16_t modifier_mask) {
                           win_ptr);
   }
 
-  menu_builder_set_trigger_key(&builder, 31);
-  menu_builder_set_mod_key(&builder, modifier_mask);
+  menu_builder_set_trigger_key(&builder, trigger_key);
+  menu_builder_set_mod_key(&builder, mod_key);
   menu_builder_set_navigation_keys(&builder, 44, "j", 45, "k", NULL,
                                    0); // j, k
   menu_builder_set_activation(&builder, true, true);
@@ -88,26 +89,28 @@ static MenuConfig rebuild_menu_config(WindowMenu *wm, uint16_t modifier_mask) {
 /*     return *config; */
 /* } */
 
-MenuConfig *create_window_menu_config(void) {
-  MenuBuilder builder = menu_builder_create("wmn", 10);
-  /* menu_builder_add_item(&builder, "Item 1", demo_action, "item1"); */
-  /* menu_builder_add_item(&builder, "Item 2", demo_action, "item2"); */
-  /* menu_builder_add_item(&builder, "Item 3", demo_action, "item3"); */
+/* MenuConfig *create_window_menu_config(void) { */
+/*   MenuBuilder builder = menu_builder_create("wmn", 10); */
+/*   /\* menu_builder_add_item(&builder, "Item 1", demo_action, "item1"); *\/ */
+/*   /\* menu_builder_add_item(&builder, "Item 2", demo_action, "item2"); *\/ */
+/*   /\* menu_builder_add_item(&builder, "Item 3", demo_action, "item3"); *\/ */
 
-  menu_builder_set_mod_key(&builder, XCB_MOD_MASK_4); // Super key
-  menu_builder_set_trigger_key(&builder, 32);         // Space key
-  /* menu_builder_set_navigation_keys(MenuBuilder *builder, uint8_t next_key,
-   * const char *next_label, uint8_t prev_key, const char *prev_label, uint8_t
-   * *direct_keys, size_t direct_count) */
-  menu_builder_set_navigation_keys(&builder, 44, "j", 45, "k", NULL,
-                                   0); // j, k
+/*   menu_builder_set_mod_key(&builder, XCB_MOD_MASK_4); // Super key */
+/*   menu_builder_set_trigger_key(&builder, 32);         // Space key */
+/*   /\* menu_builder_set_navigation_keys(MenuBuilder *builder, uint8_t
+ * next_key, */
+/*    * const char *next_label, uint8_t prev_key, const char *prev_label,
+ * uint8_t */
+/*    * *direct_keys, size_t direct_count) *\/ */
+/*   menu_builder_set_navigation_keys(&builder, 44, "j", 45, "k", NULL, */
+/*                                    0); // j, k */
 
-  menu_builder_set_activation_state(&builder, XCB_MOD_MASK_4,
-                                    49); // Super + i
-  MenuConfig *config = menu_builder_finalize(&builder);
-  menu_builder_destroy(&builder);
-  return config;
-}
+/*   menu_builder_set_activation_state(&builder, XCB_MOD_MASK_4, */
+/*                                     49); // Super + i */
+/*   MenuConfig *config = menu_builder_finalize(&builder); */
+/*   menu_builder_destroy(&builder); */
+/*   return config; */
+/* } */
 int main(int argc, char *argv[]) {
   printf("===== Menu Demo =====\n");
   printf("argc: %d\n", argc);
@@ -129,52 +132,43 @@ int main(int argc, char *argv[]) {
   input_handler_setup_x(handler);
   LOG("handler->connection: %p", handler->conn);
 
-  MenuConfig *config = create_menu_config();
+  /* MenuConfig *config = create_menu_config(); */
 
-  // log menu style
-  // printf("Menu style: background_color: %f, %f, %f, %f\n",
-  //        config->style.background_color[0],
-  //        config->style.background_color[1],
-  //        config->style.background_color[2],
-  //        config->style.background_color[3]);
-  // Crucial fix: Only register CONFIG, NOT menu itself
-  input_handler_add_menu(handler, config);
-  /* menu_manager_menu_index(handler->menu_manager, 0)->on_select = */
-  /*     window_menu_on_select; */
+  /* input_handler_add_menu(handler, config); */
 
-  menu_manager_menu_index(handler->menu_manager, 0)->on_select =
-      window_menu_on_select;
   xcb_connection_t *conn = handler->conn;
   WindowList *window_list = window_list_init(conn);
+
+  SubstringsFilterData sub_data =
+      substrings_filter_data((const char *[]){"Chrom", "Firefox"}, 2);
+  /* SubstringFilterData sub_data = substring_filter_data("macs"); */
+  WindowList *window_list_f =
+      window_list_filter(window_list, window_filter_substrings_any, &sub_data);
   WindowMenu *window_menu =
-      window_menu_create(conn, *handler->root, window_list);
+      window_menu_create(conn, window_list_f, SUPER_MASK, 31);
   MenuConfig window_menu_config =
-      rebuild_menu_config(window_menu, XCB_MOD_MASK_4);
-  window_menu->menu = menu_create(&window_menu_config);
-  window_menu->menu->on_select = window_menu_on_select;
-  /* MenuConfig *window_menu_config = &window_menu->menu->config; */
-  /* MenuConfig window_menu_config = { */
-  /*     .mod_key = SUPER_MASK, */
-  /*     .trigger_key = 49, */
-  /*     .title = "Window Menu", */
-  /*     .items = NULL, /\* No items, handled by window menu *\/ */
-  /*     .item_count = 0, */
-  /*     .nav = {.next = {.key = 44, .label = "j"}, /\* j key *\/ */
-  /*             .prev = {.key = 45, .label = "k"}, /\* k key *\/ */
-  /*             .direct = {.keys = NULL, .count = 0}}, */
-  /*     .act = {.activate_on_mod_release = true, .activate_on_direct_key =
-   * false}, */
-  /*     .style = {.background_color = {0.1, 0.1, 0.1, 0.9}, */
-  /*               .text_color = {0.8, 0.8, 0.8, 1.0}, */
-  /*               .highlight_color = {0.3, 0.3, 0.8, 1.0}, */
-  /*               .font_face = "Sans", */
-  /*               .font_size = 14.0, */
-  /*               .item_height = 20, */
-  /*               .padding = 10}}; */
+      rebuild_menu_config(window_menu, SUPER_MASK, 31);
   Menu *m = input_handler_add_menu(handler, &window_menu_config);
   m->on_select = window_menu_on_select;
-  /* menu_manager_menu_index(handler->menu_manager, 1)->on_select = */
-  /*     window_menu_on_select; */
+
+  sub_data = substrings_filter_data((const char *[]){"macs", "Visual"}, 2);
+  /* SubstringFilterData sub_data = substring_filter_data("macs"); */
+  window_list_f =
+      window_list_filter(window_list, window_filter_substrings_any, &sub_data);
+  window_menu = window_menu_create(conn, window_list_f, SUPER_MASK, 30);
+  window_menu_config = rebuild_menu_config(window_menu, SUPER_MASK, 30);
+  m = input_handler_add_menu(handler, &window_menu_config);
+  m->on_select = window_menu_on_select;
+
+  sub_data = substrings_filter_data((const char *[]){"tmux", "kitty"}, 2);
+  /* SubstringFilterData sub_data = substring_filter_data("macs"); */
+  window_list_f =
+      window_list_filter(window_list, window_filter_substrings_any, &sub_data);
+  window_menu = window_menu_create(conn, window_list_f, SUPER_MASK, 32);
+  window_menu_config = rebuild_menu_config(window_menu, SUPER_MASK, 32);
+  m = input_handler_add_menu(handler, &window_menu_config);
+  m->on_select = window_menu_on_select;
+
   if (xcb_connection_has_error(conn)) {
     fprintf(stderr, "Cannot connect to X server\n");
     return EXIT_FAILURE;
@@ -231,7 +225,7 @@ int main(int argc, char *argv[]) {
   /* } */
 
   // Cleanup (after exit)
-  menu_config_destroy(config);
+  /* menu_config_destroy(config); */
   /* input_handler_destroy(handler); */
   xcb_disconnect(conn);
   printf("===== Menu Demo Exit Success =====\n");

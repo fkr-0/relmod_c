@@ -108,7 +108,9 @@ void menu_manager_destroy(MenuManager *mgr) {
   registry_cleanup((MenuRegistryEntry *)mgr->registry);
 
   LOG("Cleaned up focus context");
-  free(mgr);
+  if (mgr)
+    free(mgr);
+  LOG("Cleaned up manager");
 }
 
 bool menu_manager_register(MenuManager *mgr, Menu *menu) {

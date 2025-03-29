@@ -5,6 +5,7 @@
 #include "cairo_menu_animation.h"
 #include "cairo_menu_render.h"
 #include "menu_animation.h"
+#include "x11_window.h"
 #include <stdlib.h>
 #include <string.h>
 #include <xcb/xcb.h>
@@ -52,9 +53,9 @@ void menu_show(Menu *menu) {
   }
   cairo_menu_animation_init(data);
   /* LOG("Animations initialized successfully\n"); */
-  menu_set_update_interval(menu, 20);
-  cairo_menu_animation_set_default(data, MENU_ANIM_FADE, MENU_ANIM_FADE,
-                                   40000.0);
+  /* menu_set_update_interval(menu, 20); */
+  /* cairo_menu_animation_set_default(data, MENU_ANIM_FADE, MENU_ANIM_FADE, */
+  /*                                  40000.0); */
 
   /* cairo_menu_render_scale(data, 1.0, 1.0); */
   cairo_menu_activate(menu);
@@ -78,16 +79,16 @@ void menu_show(Menu *menu) {
   /* menu_trigger_update(menu); */
   /* menu_redraw(menu); */
   /* } */
-  if (menu->update_interval > 0 && menu->update_cb)
-    menu_trigger_update(menu);
+  /* if (menu->update_interval > 0 && menu->update_cb) */
+  /*   menu_trigger_update(menu); */
   menu_trigger_on_select(menu);
 }
 
 void menu_hide(Menu *menu) {
   /* if (!menu || !menu->active) */
   /*   return; */
-  /* menu->active = false; */
-  /* menu->state = MENU_STATE_INACTIVE; */
+  menu->active = false;
+  menu->state = MENU_STATE_INACTIVE;
   /* menu->selected_index = 0; */
   if (menu_cairo_is_setup(menu)) {
     cairo_menu_deactivate(menu);
@@ -134,6 +135,19 @@ bool menu_handle_key_press(Menu *menu, xcb_key_press_event_t *ev) {
 
   return menu->action_cb ? menu->action_cb(ev->detail, menu->user_data) : false;
 }
+void menu_cancel(Menu *menu) {
+  if (!menu || !menu->active)
+    return;
+  menu->active = false;
+  menu->state = MENU_STATE_INACTIVE;
+  menu->selected_index = 0;
+  xcb_window_t win = menu->focus_ctx->previous_focus;
+  if (win) {
+    window_activate(menu->focus_ctx->conn, win);
+    switch_to_window(menu->focus_ctx->conn, win);
+  }
+  /* cairo_menu_hide(menu); */
+}
 
 void menu_confirm_selection(Menu *menu) {
   MenuItem *item = menu_get_selected_item(menu);
@@ -166,12 +180,18 @@ void menu_destroy(Menu *menu) {
   /*   free(menu->user_data); */
   /* if (menu->config.title) */
   /*   free(menu->config.title); */
-  if (menu->config.nav.direct.keys)
-    free(menu->config.nav.direct.keys);
-  if (menu->config.items)
-    free(menu->config.items);
+  /* if (menu->config.nav.direct.keys) */
+  /*   free(menu->config.nav.direct.keys); */
+  /* if (menu->config.items) */
+  /*   free(menu->config.items); */
 
-  free(menu);
+  /* if (menu->user_data) { */
+  /*   CairoMenuData *data = menu->user_data; */
+  /*   cairo_menu_animation_cleanup(data); */
+  /*   free(data); */
+  /* } */
+  /* if (menu) */
+  /*   free(menu); */
 }
 
 MenuItem *menu_get_selected_item(Menu *menu) {
@@ -192,11 +212,14 @@ void menu_select_prev(Menu *menu) {
 }
 
 void menu_select_index(Menu *menu, int index) {
+  LOG("Selected index: %d count: %d index: %d", menu->selected_index,
+      menu->config.item_count, index);
   if (!menu || menu->config.item_count == 0 || index < 0 ||
       (size_t)index >= menu->config.item_count || menu->selected_index == index)
     return;
   menu->selected_index = index;
   menu_trigger_on_select(menu);
+  LOG("Selected index: %d", menu->selected_index);
 }
 
 bool menu_is_active(Menu *menu) { return menu ? menu->active : false; }
@@ -245,6 +268,6 @@ void menu_trigger_on_select(Menu *menu) {
       menu->on_select(item, menu->user_data);
     }
     LOG("DONE Triggering with item %p and data %p", item, menu->user_data);
+    menu_redraw(menu);
   }
-  menu_redraw(menu);
 }

@@ -158,6 +158,7 @@ void menu_redraw(Menu *menu);
 bool menu_cairo_is_setup(Menu *menu);
 void menu_confirm_selection(Menu *menu);
 void menu_trigger_on_select(Menu *menu);
+void menu_cancel(Menu *menu);
 void menu_set_on_select_callback(Menu *menu,
                                  void (*on_select)(MenuItem *item,
                                                    void *user_data));
