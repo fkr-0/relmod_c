@@ -9,10 +9,10 @@
 #include <string.h>
 #include <xcb/xcb.h>
 
-#include "log.h"
 #ifdef MENU_DEBUG
 #define LOG_PREFIX "[CAIRO_MENU]"
 #endif
+#include "log.h"
 
 Menu *menu_create(MenuConfig *config) {
   if (!config)
@@ -38,7 +38,7 @@ void menu_set_focus_context(Menu *menu, X11FocusContext *ctx) {
 
 void menu_show(Menu *menu) {
   if (!menu || menu->active) {
-    LOG("Menu is already active or NULL [%p]", menu, menu->active);
+    LOG("Menu %p is already active or NULL [%p]", &menu, &menu->active);
     return;
   }
   menu->active = true;
@@ -80,6 +80,7 @@ void menu_show(Menu *menu) {
   /* } */
   if (menu->update_interval > 0 && menu->update_cb)
     menu_trigger_update(menu);
+  menu_trigger_on_select(menu);
 }
 
 void menu_hide(Menu *menu) {
@@ -99,7 +100,7 @@ bool menu_handle_key_press(Menu *menu, xcb_key_press_event_t *ev) {
 
   NavigationConfig *nav = &menu->config.nav;
   LOG("Key press %d %d [%s]", ev->detail, ev->state, menu->config.title);
-  LOG("NAV: %d %d %d Trigger %d", nav->next.key, nav->prev.key,
+  LOG("NAV: %d %d %ld Trigger %d", nav->next.key, nav->prev.key,
       nav->direct.count, menu->config.trigger_key);
   if (ev->detail == nav->next.key || ev->detail == menu->config.trigger_key) {
     LOG("Selecting next item");
@@ -181,36 +182,21 @@ MenuItem *menu_get_selected_item(Menu *menu) {
 }
 
 void menu_select_next(Menu *menu) {
-  if (!menu || menu->config.item_count == 0)
-    return;
-  menu->selected_index = (menu->selected_index + 1) % menu->config.item_count;
-  LOG("[%s][%d/%d] Select next", menu->config.title, menu->selected_index,
-      menu->config.item_count);
-
-  menu_trigger_on_select(menu);
-  menu_trigger_update(menu);
+  menu_select_index(menu, (menu->selected_index + 1) % menu->config.item_count);
 }
 
 void menu_select_prev(Menu *menu) {
-  if (!menu || menu->config.item_count == 0)
-    return;
-  menu->selected_index = (menu->selected_index + menu->config.item_count - 1) %
-                         menu->config.item_count;
-  LOG("[%s][%d/%d] Select prev", menu->config.title, menu->selected_index,
-      menu->config.item_count);
-
-  menu_trigger_on_select(menu);
-  menu_trigger_update(menu);
+  menu_select_index(menu,
+                    (menu->selected_index == 0 ? menu->config.item_count - 1
+                                               : menu->selected_index - 1));
 }
 
 void menu_select_index(Menu *menu, int index) {
-  if (!menu || index < 0 || (size_t)index >= menu->config.item_count ||
-      menu->selected_index == index)
+  if (!menu || menu->config.item_count == 0 || index < 0 ||
+      (size_t)index >= menu->config.item_count || menu->selected_index == index)
     return;
   menu->selected_index = index;
-
   menu_trigger_on_select(menu);
-  menu_trigger_update(menu);
 }
 
 bool menu_is_active(Menu *menu) { return menu ? menu->active : false; }
@@ -234,33 +220,11 @@ void menu_trigger_update(Menu *menu) {
     menu->update_cb(menu, menu->user_data);
 }
 
-void menu_set_activation_state(MenuConfig *config, int mod_key, int keycode) {
-  if (!config)
-    return;
-
-  /* if (!menu->config.act_state.initialized) { */
-  config->act_state.config = config;
-  config->act_state.mod_key = mod_key;
-  config->act_state.keycode = keycode;
-  config->act_state.initialized = false;
-  /* ActivationState *state = &config->act_state; */
-  /* LOG("State: config=%p, mod_key=0x%x, keycode=%u, initialized=%d, " */
-  /*     "menu=%p, title=%s", */
-  /*     state->config, state->mod_key, state->keycode, state->initialized, */
-  /*     state->menu, state->config->title); */
-
-  /* config->act_state.menu = menu; */
-  /* } else { */
-  /*   menu->config.act_state.mod_key = mod_key; */
-  /*   menu->config.act_state.keycode = keycode; */
-  /*   menu->config.act_state.menu = menu; */
-  /* } */
-}
-
 void menu_redraw(Menu *menu) {
   if (!menu)
     return;
   cairo_menu_render_request_update(menu->user_data);
+  cairo_menu_render_show(menu->user_data);
 }
 
 void menu_set_on_select_callback(Menu *menu,
@@ -272,10 +236,15 @@ void menu_set_on_select_callback(Menu *menu,
 }
 
 void menu_trigger_on_select(Menu *menu) {
+  LOG("Triggering on select %p with item %p and data %p, callback:%p",
+      menu_get_selected_item(menu), menu->user_data, menu, menu->on_select);
   if (menu && menu->on_select) {
     MenuItem *item = menu_get_selected_item(menu);
+    LOG("Triggering with item %p and data %p", item, menu->user_data);
     if (item) {
       menu->on_select(item, menu->user_data);
     }
+    LOG("DONE Triggering with item %p and data %p", item, menu->user_data);
   }
+  menu_redraw(menu);
 }

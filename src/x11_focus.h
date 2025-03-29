@@ -10,11 +10,12 @@
 typedef struct {
   xcb_connection_t *conn;
   xcb_window_t previous_focus;
+  xcb_window_t root;
   xcb_ewmh_connection_t *ewmh;
 } X11FocusContext;
 
 // Initialization and cleanup
-X11FocusContext *x11_focus_init(xcb_connection_t *conn,
+X11FocusContext *x11_focus_init(xcb_connection_t *conn, xcb_window_t root,
                                 xcb_ewmh_connection_t *ewmh);
 void x11_focus_cleanup(X11FocusContext *ctx);
 

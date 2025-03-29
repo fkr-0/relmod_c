@@ -140,7 +140,6 @@ struct Menu {
 Menu *menu_create(MenuConfig *config);
 void menu_destroy(Menu *menu);
 
-void menu_set_activation_state(MenuConfig *config, int mod_key, int keycode);
 void menu_set_focus_context(Menu *menu, X11FocusContext *ctx);
 void menu_show(Menu *menu);
 void menu_hide(Menu *menu);
@@ -162,4 +161,5 @@ void menu_trigger_on_select(Menu *menu);
 void menu_set_on_select_callback(Menu *menu,
                                  void (*on_select)(MenuItem *item,
                                                    void *user_data));
+void window_menu_on_select(MenuItem *item, void *user_data);
 #endif

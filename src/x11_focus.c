@@ -20,7 +20,7 @@ static xcb_atom_t get_atom(xcb_connection_t *conn, const char *name) {
   return atom;
 }
 
-X11FocusContext *x11_focus_init(xcb_connection_t *conn,
+X11FocusContext *x11_focus_init(xcb_connection_t *conn, xcb_window_t root,
                                 xcb_ewmh_connection_t *ewmh) {
 
   X11FocusContext *ctx = calloc(1, sizeof(X11FocusContext));
@@ -28,6 +28,7 @@ X11FocusContext *x11_focus_init(xcb_connection_t *conn,
     fprintf(stderr, "Failed to allocate X11FocusContext\n");
     return NULL;
   }
+  ctx->root = root;
   ctx->conn = conn;
   ctx->ewmh = ewmh;
   ctx->previous_focus = XCB_NONE;

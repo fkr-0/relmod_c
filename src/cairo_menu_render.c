@@ -1,5 +1,5 @@
 #include "cairo_menu_render.h"
-#include "log.h"
+#include "x11_window.h"
 #include <cairo/cairo-xcb.h>
 #include <math.h>
 #include <stdio.h>
@@ -8,6 +8,94 @@
 #ifdef MENU_DEBUG
 #define LOG_PREFIX "[CAIRO_MENU_RENDER]"
 #endif
+#include "log.h"
+int get_window_absolute_geometry(xcb_connection_t *conn, xcb_window_t window) {
+  int x = 0, y = 0, width = 0, height = 0;
+
+  // Request the window's geometry (x, y, width, height) relative to its parent.
+  xcb_get_geometry_cookie_t geo_cookie = xcb_get_geometry(conn, window);
+  xcb_get_geometry_reply_t *geo_reply =
+      xcb_get_geometry_reply(conn, geo_cookie, NULL);
+  /* if (!geo_reply) { */
+  /*   // If reply is NULL, the geometry couldn't be retrieved; return default
+   */
+  /*   // geometry. */
+  /*   return geom; */
+  /* } */
+  /* x = geo_reply->x; */
+  /* y = geo_reply->y; */
+  /* width = geo_reply->width; */
+  /* height = geo_reply->height; */
+  /* int rx = geo_reply->root; */
+  /* int ry = geo_reply->root; */
+  /* int rw = 0; */
+  /* int rh = 0; */
+  /* /\* xcb_window_t rw = geo_reply->root; *\/ */
+  /* /\* int rh = geo_reply->root->height; *\/ */
+  /* LOG("Root geometry: x=%d, y=%d, width=%d, height=%d", rx, ry, rw, rh); */
+  /* LOG("Window geometry: x=%d, y=%d, width=%d, height=%d", x, y, width,
+   * height); */
+  // Translate the window's (0,0) coordinate to the root window coordinates.
+  // This gives us the absolute position of the window.
+  xcb_translate_coordinates_cookie_t tcookie =
+      xcb_translate_coordinates(conn, window, geo_reply->root, 0, 0);
+  xcb_translate_coordinates_reply_t *treply =
+      xcb_translate_coordinates_reply(conn, tcookie, NULL);
+  if (treply) {
+    x = treply->dst_x; // Absolute x position relative to the root window.
+    y = treply->dst_y; // Absolute y position relative to the root window.
+    width = geo_reply->width;
+    height = geo_reply->height;
+    LOG("Window absolute geometry: x=%d, y=%d, width=%d, height=%d", x, y,
+        width, height);
+    free(treply);
+  }
+
+  // Set the width and height as reported by the geometry reply.
+  free(geo_reply);
+  return x > 1900 ? 1 : 0;
+}
+
+static int get_desktop_x(xcb_connection_t *conn) {
+  // Get the active window ID
+  xcb_window_t active_window = window_get_focused(conn);
+  get_window_absolute_geometry(conn, active_window);
+  if (active_window == XCB_NONE) {
+    return -1;
+  }
+
+  // Get the geometry of the active window
+  xcb_get_geometry_cookie_t cookie = xcb_get_geometry(conn, active_window);
+  xcb_get_geometry_reply_t *reply = xcb_get_geometry_reply(conn, cookie, NULL);
+  if (!reply) {
+    return -1;
+  }
+
+  // Calculate the x-coordinate of the active window
+  int desktop_x = reply->x;
+  free(reply);
+  return desktop_x;
+}
+static int get_active_window_top_right_corner(xcb_connection_t *conn) {
+  // Get the active window ID
+  xcb_window_t active_window = window_get_focused(conn);
+  if (active_window == XCB_NONE) {
+    return -1;
+  }
+
+  // Get the geometry of the active window
+  xcb_get_geometry_cookie_t cookie = xcb_get_geometry(conn, active_window);
+  xcb_get_geometry_reply_t *reply = xcb_get_geometry_reply(conn, cookie, NULL);
+  if (!reply) {
+    return -1;
+  }
+
+  // Calculate the top-right corner of the active window
+  int top_right_x = reply->x; // + reply->width;
+  /* int top_right_y = reply->y; */
+  free(reply);
+  return top_right_x;
+}
 /* Filename: cairo_menu_render_improvements.c */
 /* This file contains improved rendering functions for our Cairo-based UI menu.
    Enhancements include:
@@ -16,6 +104,30 @@
    - Rounded corners and drop shadows for selected items.
    - Optional fade effect support for animation.
 */
+// Function to set the window sticky by changing _NET_WM_STATE property.
+// This makes the window appear on all desktops.
+static void set_window_sticky(xcb_connection_t *conn, xcb_window_t window) {
+  // Get _NET_WM_STATE atom.
+  xcb_intern_atom_cookie_t cookie_state =
+      xcb_intern_atom(conn, 0, strlen("_NET_WM_STATE"), "_NET_WM_STATE");
+  xcb_intern_atom_reply_t *reply_state =
+      xcb_intern_atom_reply(conn, cookie_state, NULL);
+
+  // Get _NET_WM_STATE_STICKY atom.
+  xcb_intern_atom_cookie_t cookie_sticky = xcb_intern_atom(
+      conn, 0, strlen("_NET_WM_STATE_STICKY"), "_NET_WM_STATE_STICKY");
+  xcb_intern_atom_reply_t *reply_sticky =
+      xcb_intern_atom_reply(conn, cookie_sticky, NULL);
+
+  if (reply_state && reply_sticky) {
+    // Set the _NET_WM_STATE property on the window to include
+    // _NET_WM_STATE_STICKY. XCB_ATOM_ATOM is used as the property type.
+    xcb_change_property(conn, XCB_PROP_MODE_REPLACE, window, reply_state->atom,
+                        XCB_ATOM_ATOM, 32, 1, &reply_sticky->atom);
+  }
+  free(reply_state);
+  free(reply_sticky);
+}
 
 /*-------------------------*/
 /* Utility Drawing Helpers */
@@ -125,7 +237,8 @@ void cairo_menu_render_item(CairoMenuData *data, const MenuItem *item,
                      style->item_height - style->padding, radius, shadow_offset,
                      shadow_color);
 
-    // Draw the selected background with a gradient inside a rounded rectangle
+    // Draw the selected background with a gradient inside a rounded
+    // rectangle
     cairo_save(cr);
     cairo_translate(cr, x, y_position);
     cairo_new_path(cr);
@@ -181,55 +294,93 @@ void cairo_menu_render_apply_fade(CairoMenuData *data, double progress) {
   This modular approach lets you mix and match various effects.
 */
 /* Create menu window */
+/* static xcb_window_t create_window(xcb_connection_t *conn, xcb_window_t
+ * parent, */
+/*                                   X11FocusContext *ctx, xcb_screen_t *screen,
+ */
+/*                                   int width, int height) { */
+
+/*     int x = screen->width_in_pixels - width - 20; // Padding 20px */
+/*     int y = 20; */
+/*     xcb_window_t window = xcb_generate_id(conn); */
+/*     // printf("Window ID: %d\n", window); */
+
+/*     uint32_t mask = */
+/*         XCB_CW_BACK_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK; */
+/*     uint32_t vals[3] = {0, 1, XCB_EVENT_MASK_EXPOSURE}; */
+
+/*     /\* uint32_t mask = *\/ */
+/*     /\*     XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK; *\/ */
+/*     /\* uint32_t value_list[] = {screen->black_pixel, *\/ */
+/*     /\*                          XCB_EVENT_MASK_KEY_PRESS | *\/ */
+/*     /\*                              XCB_EVENT_MASK_FOCUS_CHANGE}; *\/ */
+/*     xcb_create_window(conn, XCB_COPY_FROM_PARENT, window, screen->root, x, y,
+ */
+/*                       width, height, 1, XCB_WINDOW_CLASS_INPUT_OUTPUT, */
+/*                       screen->root_visual, mask, vals); */
+/*     x11_set_window_floating(ctx, window); */
+
+/*     LOG("Creating window"); */
+/*     /\* xcb_screen_t *screen = */
+/*   xcb_setup_roots_iterator(xcb_get_setup(conn)).data; */
+/*      *\/ */
+
+/*     /\* uint32_t values[3]; *\/ */
+/*     /\* uint32_t mask = *\/ */
+/*     /\*     XCB_CW_BACK_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK;
+ */
+/*      *\/ */
+
+/*     /\* values[0] = screen->black_pixel; *\/ */
+/*     /\* values[1] = 1; /\\* Override redirect *\\/ *\/ */
+/*     /\* values[2] = XCB_EVENT_MASK_EXPOSURE; *\/ */
+
+/*     /\* xcb_window_t window = xcb_generate_id(conn); *\/ */
+/*     /\* xcb_create_window(conn, XCB_COPY_FROM_PARENT, window, parent, 0, 0,
+ */
+/*   /\\* x, */
+/*      * y *\\/ *\/ */
+/*     /\*                   width, height, /\\* width, height *\\/ *\/ */
+/*     /\*                   0,             /\\* border width *\\/ *\/ */
+/*     /\*                   XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual,
+ */
+/*   mask, */
+/*      *\/ */
+/*     /\*                   values); *\/ */
+
+/*     LOG("Created window: %u", window); */
+/*     return window; */
+/* } */
 static xcb_window_t create_window(xcb_connection_t *conn, xcb_window_t parent,
                                   X11FocusContext *ctx, xcb_screen_t *screen,
                                   int width, int height) {
 
-  int x = screen->width_in_pixels - width - 20; // Padding 20px
-  int y = 20;
-  xcb_window_t window = xcb_generate_id(conn);
-  printf("Window ID: %d\n", window);
+  // Default positioning: top-right of the screen with 20px padding.
+  /* int x = screen->width_in_pixels - width - 20; */
+  int x = get_active_window_top_right_corner(conn); //- width - 20;
+  int y = 30;
 
+  // Generate new window ID.
+  xcb_window_t window = xcb_generate_id(conn);
+
+  // Set window attributes: background pixel, override redirect, and event mask.
   uint32_t mask =
       XCB_CW_BACK_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK;
   uint32_t vals[3] = {0, 1, XCB_EVENT_MASK_EXPOSURE};
 
-  /* uint32_t mask = */
-  /*     XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK; */
-  /* uint32_t value_list[] = {screen->black_pixel, */
-  /*                          XCB_EVENT_MASK_KEY_PRESS | */
-  /*                              XCB_EVENT_MASK_FOCUS_CHANGE}; */
+  // Create the window on the root window.
   xcb_create_window(conn, XCB_COPY_FROM_PARENT, window, screen->root, x, y,
                     width, height, 1, XCB_WINDOW_CLASS_INPUT_OUTPUT,
                     screen->root_visual, mask, vals);
-  x11_set_window_floating(ctx, window);
 
-  LOG("Creating window");
-  /* xcb_screen_t *screen =
-xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
-   */
+  // Optionally, if you have a function to set floating, call it:
+  // x11_set_window_floating(ctx, window);
 
-  /* uint32_t values[3]; */
-  /* uint32_t mask = */
-  /*     XCB_CW_BACK_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK;
-   */
+  // Mark the window as sticky so that it appears on all desktops.
+  set_window_sticky(conn, window);
 
-  /* values[0] = screen->black_pixel; */
-  /* values[1] = 1; /\* Override redirect *\/ */
-  /* values[2] = XCB_EVENT_MASK_EXPOSURE; */
-
-  /* xcb_window_t window = xcb_generate_id(conn); */
-  /* xcb_create_window(conn, XCB_COPY_FROM_PARENT, window, parent, 0, 0,
-/\* x,
-   * y *\/ */
-  /*                   width, height, /\* width, height *\/ */
-  /*                   0,             /\* border width *\/ */
-  /*                   XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual,
-mask,
-   */
-  /*                   values); */
-
-  LOG("Created window: %u", window);
+  // Debug output.
+  printf("Created sticky window: %u at position (%d, %d)\n", window, x, y);
   return window;
 }
 
@@ -250,30 +401,30 @@ bool cairo_menu_render_init(CairoMenuData *data, xcb_connection_t *conn,
       create_window(conn, parent, ctx, screen, render->width, render->height);
   LOG("Creating window: %d", render->window); // Add debug print
   if (render->window == XCB_NONE) {
-    printf("Failed to create window\n");
+    // printf("Failed to create window\n");
     return false;
   }
 
   /* Create Cairo surface */
-  printf("Creating Cairo surface\n");
+  // printf("Creating Cairo surface\n");
   render->surface = cairo_xcb_surface_create(conn, render->window, visual,
                                              render->width, render->height);
-  printf("Cairo surface created: %p, status=%d\n", render->surface,
-         cairo_surface_status(render->surface));
+  // printf("Cairo surface created: %p, status=%d\n", render->surface,
+  //      cairo_surface_status(render->surface));
   if (cairo_surface_status(render->surface) != CAIRO_STATUS_SUCCESS) {
-    printf("Failed to create Cairo surface\n");
+    // printf("Failed to create Cairo surface\n");
     xcb_destroy_window(conn, render->window);
     render->window = XCB_NONE; // Set to XCB_NONE after destruction
     return false;
   }
 
   /* Create Cairo context */
-  printf("Creating Cairo context\n");
+  // printf("Creating Cairo context\n");
   render->cr = cairo_create(render->surface);
-  printf("Cairo context created: %p, status=%d\n", render->cr,
-         cairo_status(render->cr));
+  // printf("Cairo context created: %p, status=%d\n", render->cr,
+  // cairo_status(render->cr));
   if (cairo_status(render->cr) != CAIRO_STATUS_SUCCESS) {
-    printf("Failed to create Cairo context\n");
+    // printf("Failed to create Cairo context\n");
     cairo_surface_destroy(render->surface);
     xcb_destroy_window(conn, render->window);
     render->window = XCB_NONE; // Set to XCB_NONE after destruction
@@ -305,28 +456,31 @@ void cairo_menu_render_cleanup(CairoMenuData *data) {
     render->surface = NULL;
   }
 
-  printf("Cleaning up window: %d\n", render->window); // Add debug print
-  printf("test null: %p\n", NULL);                    // Add debug print
+  // printf("Cleaning up window: %d\n", render->window); // Add debug print
+  // printf("test null: %p\n", NULL);                    // Add debug print
 
   if (render->window != XCB_NONE) { // Check if window is valid
     if (data->conn) {
       // test data->conn to prevent segmentation fault,
       // only destroy if connection is initialized
-      printf("Checking connection: %p\n", data->conn); // Add debug print
+      // printf("Checking connection: %p\n", data->conn); // Add debug
+      // print
 
       int connection_error = xcb_connection_has_error(data->conn);
       if (connection_error == 0) { // 0 means connection is healthy
-        printf("No error: 1Destroying window: %d using connection: %p\n",
-               render->window,
-               data->conn); // Add debug print
+        // printf("No error: 1Destroying window: %d using connection:
+        // %p\n",
+        //       render->window,
+        //       data->conn); // Add debug print
         xcb_destroy_window(data->conn, render->window);
 
-        printf("2Destroyed window: %d using connection: %p\n", render->window,
-               data->conn); // Add debug print
+        // printf("2Destroyed window: %d using connection: %p\n",
+        // render->window,
+        //       data->conn); // Add debug print
 
       } else {
-        printf("Connection error: %d\n",
-               connection_error); // Add debug print
+        // printf("Connection error: %d\n",
+        //       connection_error); // Add debug print
       }
     }
     render->window = XCB_NONE; // Set to XCB_NONE after destruction
@@ -374,14 +528,34 @@ void cairo_menu_render_show(CairoMenuData *data) {
     cairo_menu_render_items(data, data->menu);
     cairo_menu_render_end(data);
   }
-  int width = 400; /* Default size */
+  int x_pad = 20;
+  int y_pad = 30;
+  int height_pad = 0;
+  int width_pad = 20;
+  int line_height = 42;
+  int char_width = 9;
+  int min_width = 200; /* Default size */
   xcb_screen_t *screen =
       xcb_setup_roots_iterator(xcb_get_setup(data->conn)).data;
-  int x = screen->width_in_pixels - width - 20; // Padding 20px
-  int y = 20;
+  /* int x = screen->width_in_pixels - width - 20; // Padding 20px */
+  int x =
+      get_window_absolute_geometry(data->conn, window_get_focused(data->conn));
+  x = (x * 1920) + x_pad;
+  int y = y_pad;
+  int num_items = data->menu->config.item_count;
+  int height = ((1 + num_items) * 42) + (2 * height_pad);
+  for (int i = 0; i < num_items; i++) {
+    int item_width = strlen(data->menu->config.items[i].label) * 9;
+    if (item_width > min_width) {
+      min_width = item_width;
+    }
+  }
+  min_width += (2 * width_pad);
   xcb_configure_window(data->conn, data->render.window,
-                       XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y,
-                       (const uint32_t[]){x, y});
+                       XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y |
+                           XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT,
+                       (const uint32_t[]){x, y, min_width, height});
+  cairo_menu_render_resize(data, min_width, height);
 }
 void cairo_menu_render_hide(CairoMenuData *data) {
   xcb_unmap_window(data->conn, data->render.window);
@@ -411,12 +585,12 @@ void cairo_menu_render_resize(CairoMenuData *data, int width, int height) {
 
 /* Rendering operations */
 void cairo_menu_render_begin(CairoMenuData *data) {
-  printf("Rendering begin\n");
+  // printf("Rendering begin\n");
   cairo_save(data->render.cr);
 }
 
 void cairo_menu_render_end(CairoMenuData *data) {
-  printf("Rendering end\n");
+  // printf("Rendering end\n");
   cairo_restore(data->render.cr);
   cairo_surface_flush(data->render.surface);
   xcb_flush(data->conn);
@@ -474,12 +648,12 @@ void cairo_menu_render_end(CairoMenuData *data) {
 /* } */
 
 void cairo_menu_render_items(CairoMenuData *data, const Menu *menu) {
-  printf("Rendering items\n");
-  printf("Rendering items: data=%p, menu=%p\n", data, menu);
+  // printf("Rendering items\n");
+  // printf("Rendering items: data=%p, menu=%p\n", data, menu);
   const MenuStyle *style = &menu->config.style;
   double y = style->padding * 2 + style->font_size;
   for (size_t i = 0; i < menu->config.item_count; i++) {
-    printf("Rendering item %zu: %s\n", i, menu->config.items[i].label);
+    // printf("Rendering item %zu: %s\n", i, menu->config.items[i].label);
     cairo_menu_render_item(data, &menu->config.items[i], style,
                            (int)i == menu->selected_index, y);
     y += style->item_height;

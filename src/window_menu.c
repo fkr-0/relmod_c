@@ -1,213 +1,150 @@
+/* === window_menu.c === */
 #include "window_menu.h"
-#include "cairo_menu.h"
+#include "cairo_menu_render.h"
 #include "menu.h"
-#include <cairo/cairo-xcb.h>
+#include "menu_builder.h"
+#include "window_menu.h" // self-include for consistency
+#include "x11_window.h"  // assuming window_activate is declared here
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <xcb/xcb.h>
 
-typedef struct {
-  xcb_connection_t *conn;
-  WindowList *window_list;
-  int selected_index;
-  xcb_window_t window;
-  cairo_surface_t *surface;
-  cairo_t *cr;
-  int width;
-  int height;
-} WindowMenuData;
+#ifdef MENU_DEBUG
+#define LOG_PREFIX "[WINMEN]"
+#endif
+#include "log.h"
 
-static void draw_window_menu(WindowMenuData *data) {
-  cairo_t *cr = data->cr;
-
-  // Clear background
-  cairo_set_source_rgba(cr, 0.1, 0.1, 0.1, 0.9);
-  cairo_paint(cr);
-
-  // Draw window list
-  cairo_select_font_face(cr, "Sans", CAIRO_FONT_SLANT_NORMAL,
-                         CAIRO_FONT_WEIGHT_NORMAL);
-  cairo_set_font_size(cr, 14);
-
-  for (size_t i = 0; i < data->window_list->count; i++) {
-    if ((int)i == data->selected_index) {
-      // Highlight selected item
-      cairo_set_source_rgb(cr, 0.3, 0.3, 0.8);
-      cairo_rectangle(cr, 0, i * 20, data->width, 20);
-      cairo_fill(cr);
-      cairo_set_source_rgb(cr, 1, 1, 1);
-    } else {
-      cairo_set_source_rgb(cr, 0.8, 0.8, 0.8);
-    }
-
-    // Draw window title with desktop number
-    cairo_move_to(cr, 10, (i + 1) * 20 - 5);
-    cairo_show_text(cr, data->window_list->windows[i].title);
-
-    // Indicate focused window
-    if (data->window_list->windows[i].focused) {
-      cairo_move_to(cr, data->width - 20, (i + 1) * 20 - 5);
-      cairo_show_text(cr, "●");
-    }
-  }
-
-  cairo_surface_flush(data->surface);
-  xcb_flush(data->conn);
-}
-
-static bool window_menu_activates(uint16_t modifiers, uint8_t keycode,
-                                  void *user_data) {
-  (void)keycode;
-  WindowMenuData *data = user_data;
-  return (modifiers & XCB_MOD_MASK_4);
-}
-
-static bool window_menu_action(uint8_t keycode, void *user_data) {
-  WindowMenuData *data = user_data;
-
-  switch (keycode) {
-  case 111: // Up arrow
-    if (data->window_list->count > 0) {
-      data->selected_index =
-          (data->selected_index - 1 + data->window_list->count) %
-          data->window_list->count;
-      draw_window_menu(data);
-    }
-    break;
-
-  case 116: // Down arrow
-    if (data->window_list->count > 0) {
-      data->selected_index =
-          (data->selected_index + 1) % data->window_list->count;
-      draw_window_menu(data);
-    }
-    break;
-
-  case 36: // Enter
-    if (data->selected_index >= 0 &&
-        data->selected_index < (int)data->window_list->count) {
-      xcb_window_t win = data->window_list->windows[data->selected_index].id;
-      window_activate(data->conn, win);
-      return false; // Close menu
-    }
-    break;
-
-  case 9:         // Escape
-    return false; // Close menu
-
-  default:
-    break;
-  }
-  return true;
-}
-
-static void window_menu_cleanup(void *user_data) {
-  WindowMenuData *data = user_data;
-  if (data) {
-    cairo_destroy(data->cr);
-    cairo_surface_destroy(data->surface);
-    xcb_destroy_window(data->conn, data->window);
-    free(data);
+// Helper: on-select callback for the menu.
+// When an item is selected, this callback is invoked to activate the
+// corresponding window.
+void window_menu_on_select(MenuItem *item, void *user_data) {
+  WindowMenu *wm = (WindowMenu *)user_data;
+  if (wm && item && item->metadata) {
+    // metadata is stored as a pointer to xcb_window_t
+    xcb_window_t win = *((xcb_window_t *)item->metadata);
+    // Activate the window (function assumed to be provided elsewhere)
+    /* focus_window(wm->conn, *wm->menu->focus_ctx->ewmh, win); */
+    uint32_t desktop = window_get_desktop(wm->conn, win);
+    LOG("OnSelect Window: %u, desktop: %u", win, desktop);
+    window_activate(wm->conn, win);
+    switch_to_window(wm->conn, win);
+    /* CairoMenuData *data = (CairoMenuData *)wm->menu->user_data; */
+    /* cairo_menu_render_request_update(data); */
+    /* menu_hide(wm->menu); */
+    /* menu_show(wm->menu); */
   }
 }
 
-static xcb_window_t create_window_menu_window(xcb_connection_t *conn,
-                                              xcb_window_t parent, int width,
-                                              int height) {
-  xcb_screen_t *screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
-
-  // Position menu in top-right corner
-  int x = screen->width_in_pixels - width - 20;
-  int y = 20;
-
-  uint32_t mask =
-      XCB_CW_BACK_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK;
-  uint32_t values[] = {0, // background color
-                       1, // override redirect
-                       XCB_EVENT_MASK_EXPOSURE};
-
-  xcb_window_t window = xcb_generate_id(conn);
-  xcb_create_window(conn, XCB_COPY_FROM_PARENT, window, parent, x, y, width,
-                    height, 1, XCB_WINDOW_CLASS_INPUT_OUTPUT,
-                    screen->root_visual, mask, values);
-
-  xcb_map_window(conn, window);
-  xcb_flush(conn);
-  return window;
-}
-
-WindowMenuConfig window_menu_create(xcb_connection_t *conn,
-                             xcb_window_t parent_window,
-                             uint16_t modifier_mask, WindowList *window_list) {
-  WindowMenuData *data = calloc(1, sizeof(WindowMenuData));
-  data->conn = conn;
-  data->window_list = window_list;
-  data->selected_index = -1;
-  data->width = 400;
-  data->height = window_list->count * 20 + 20;
-
-  // Create window
-  data->window =
-      create_window_menu_window(conn, parent_window, data->width, data->height);
-
-  // Set up Cairo
-  xcb_screen_t *screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
-  xcb_visualtype_t *visual = NULL;
-
-  // Find visual
-  xcb_depth_iterator_t depth_iter = xcb_screen_allowed_depths_iterator(screen);
-  for (; depth_iter.rem; xcb_depth_next(&depth_iter)) {
-    xcb_visualtype_iterator_t visual_iter =
-        xcb_depth_visuals_iterator(depth_iter.data);
-    for (; visual_iter.rem; xcb_visualtype_next(&visual_iter)) {
-      if (screen->root_visual == visual_iter.data->visual_id) {
-        visual = visual_iter.data;
-        break;
-      }
+// Helper: (Re)builds the MenuConfig items from the current WindowList.
+static MenuConfig build_menu_config(WindowMenu *wm, uint16_t modifier_mask) {
+  MenuBuilder builder =
+      menu_builder_create("Window Menu", wm->window_list->count);
+  for (size_t i = 0; i < wm->window_list->count; i++) {
+    xcb_window_t *win_ptr = malloc(sizeof(xcb_window_t));
+    if (!win_ptr) {
+      fprintf(stderr, "Failed to allocate memory for window id\n");
+      exit(EXIT_FAILURE);
     }
-    if (visual)
-      break;
+    *win_ptr = wm->window_list->windows[i].id;
+    menu_builder_add_item(&builder, wm->window_list->windows[i].title, NULL,
+                          win_ptr);
   }
 
-  data->surface = cairo_xcb_surface_create(conn, data->window, visual,
-                                           data->width, data->height);
-  data->cr = cairo_create(data->surface);
-
-  // Initial draw
-  draw_window_menu(data);
-
-  return (WindowMenuConfig){.modifier_mask = modifier_mask,
-                          .activate_cb = window_menu_activates,
-                          .action_cb = window_menu_action,
-                          .cleanup_cb = window_menu_cleanup,
-                          .user_data = data};
+  menu_builder_set_trigger_key(&builder, 31);
+  menu_builder_set_mod_key(&builder, modifier_mask);
+  menu_builder_set_navigation_keys(&builder, 44, "j", 45, "k", NULL, 0); // j, k
+  menu_builder_set_activation(&builder, true, true);
+  MenuConfig *config = menu_builder_finalize(&builder);
+  menu_builder_destroy(&builder);
+  return *config;
 }
 
-xcb_window_t window_menu_get_selected(void *user_data) {
-  WindowMenuData *data = user_data;
-  if (data && data->selected_index >= 0 &&
-      data->selected_index < (int)data->window_list->count) {
-    return data->window_list->windows[data->selected_index].id;
+WindowMenu *window_menu_create(xcb_connection_t *conn, uint16_t modifier_mask,
+                               WindowList *window_list) {
+  // Allocate the WindowMenu structure.
+  WindowMenu *wm = calloc(1, sizeof(WindowMenu));
+  if (!wm) {
+    fprintf(stderr, "Failed to allocate WindowMenu\n");
+    exit(EXIT_FAILURE);
+  }
+  wm->conn = conn;
+  wm->window_list = window_list;
+
+  // Build the MenuConfig from the window list.
+  MenuConfig config = build_menu_config(wm, modifier_mask);
+
+  // Create the menu using the working menu.h API.
+  wm->menu = menu_create(&config);
+  /* menu_set_on_select_callback(wm->menu, window_menu_on_select); */
+  if (!wm->menu) {
+    fprintf(stderr, "Failed to create menu\n");
+    free(wm);
+    exit(EXIT_FAILURE);
+  }
+  // Set the on-select callback so that any selection activates the window.
+  menu_set_on_select_callback(wm->menu, window_menu_on_select);
+  wm->menu->on_select = window_menu_on_select;
+  // Ensure the WindowMenu pointer is available in the menu’s user_data.
+  wm->menu->user_data = wm;
+
+  return wm;
+}
+
+xcb_window_t window_menu_get_selected(WindowMenu *wm) {
+  LOG("WindowMenu Get Selected");
+  if (wm && wm->menu) {
+    MenuItem *item = menu_get_selected_item(wm->menu);
+    if (item && item->metadata)
+      return *((xcb_window_t *)item->metadata);
   }
   return XCB_NONE;
 }
 
-void window_menu_update_windows(void *user_data) {
-  WindowMenuData *data = user_data;
-  if (data) {
-    window_list_update(data->window_list, data->conn);
-    data->height = data->window_list->count * 20 + 20;
+void window_menu_update_windows(WindowMenu *wm) {
+  if (wm && wm->menu && wm->window_list) {
+    // Update the window list (function provided elsewhere).
+    window_list_update(wm->window_list, wm->conn);
+    // Free existing menu item metadata.
+    for (size_t i = 0; i < wm->menu->config.item_count; i++) {
+      free(wm->menu->config.items[i].metadata);
+    }
+    free(wm->menu->config.items);
+    // Rebuild the menu configuration items from the updated window list.
+    wm->menu->config.item_count = wm->window_list->count;
+    wm->menu->config.items = calloc(wm->window_list->count, sizeof(MenuItem));
+    if (!wm->menu->config.items) {
+      fprintf(stderr, "Failed to allocate menu items during update\n");
+      exit(EXIT_FAILURE);
+    }
+    for (size_t i = 0; i < wm->window_list->count; i++) {
+      wm->menu->config.items[i].id = wm->window_list->windows[i].title;
+      wm->menu->config.items[i].label = wm->window_list->windows[i].title;
+      xcb_window_t *win_ptr = malloc(sizeof(xcb_window_t));
+      if (!win_ptr) {
+        fprintf(stderr,
+                "Failed to allocate memory for window id during update\n");
+        exit(EXIT_FAILURE);
+      }
+      *win_ptr = wm->window_list->windows[i].id;
+      wm->menu->config.items[i].metadata = win_ptr;
+    }
+    // Trigger a redraw of the menu.
+    menu_redraw(wm->menu);
+  }
+}
 
-    // Resize surface if needed
-    cairo_xcb_surface_set_size(data->surface, data->width, data->height);
-
-    // Update window size
-    uint32_t values[] = {data->width, data->height};
-    xcb_configure_window(data->conn, data->window,
-                         XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT,
-                         values);
-
-    draw_window_menu(data);
+void window_menu_cleanup(WindowMenu *wm) {
+  if (wm) {
+    if (wm->menu) {
+      // Free metadata for each menu item.
+      for (size_t i = 0; i < wm->menu->config.item_count; i++) {
+        free(wm->menu->config.items[i].metadata);
+      }
+      free(wm->menu->config.items);
+      // Destroy the menu via the menu API.
+      menu_destroy(wm->menu);
+    }
+    free(wm);
   }
 }

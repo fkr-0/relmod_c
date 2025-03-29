@@ -28,7 +28,7 @@ void input_handler_destroy(InputHandler *handler);
 /* Process a single input event */
 bool input_handler_process_event(InputHandler *handler);
 
-bool input_handler_add_menu(InputHandler *handler, MenuConfig *config);
+Menu *input_handler_add_menu(InputHandler *handler, MenuConfig *config);
 /* bool input_handler_remove_menu(InputHandler *handler, Menu *menu); */
 
 /* Add activation state */

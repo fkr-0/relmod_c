@@ -1,7 +1,6 @@
 /* input_handler.c - Complete and updated Input handling implementation */
 #include "input_handler.h"
 #include "cairo_menu.h" // Include cairo_menu.h for menu_setup_cairo
-#include "log.h"
 #include "menu_manager.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,6 +11,7 @@
 #ifdef MENU_DEBUG
 #define LOG_PREFIX "[INPUT]"
 #endif
+#include "log.h"
 
 static bool is_modifier_release(uint16_t state, uint8_t keycode) {
   return (state == 0x40 && keycode == 133) || // Super
@@ -69,7 +69,8 @@ void input_handler_setup_x(InputHandler *handler) {
   // Set up focus context and assign to handler
   handler->conn = conn;
   handler->screen = screen;
-  handler->focus_ctx = x11_focus_init(conn, ewmh);
+  handler->focus_ctx = x11_focus_init(conn, root, ewmh);
+  handler->modifier_mask = 0;
   if (!handler->focus_ctx) {
     fprintf(stderr, "[ERROR] Failed to create focus context\n");
     goto fail_ewmh; // cleanup ewmh and connection
@@ -81,6 +82,7 @@ void input_handler_setup_x(InputHandler *handler) {
     goto fail_focus;
   }
   *handler->root = root;
+  handler->root = &root; // Set root root
 
   if (!conn || root == XCB_NONE) {
     LOG("[ERROR] Failed to create input handler");
@@ -89,11 +91,7 @@ void input_handler_setup_x(InputHandler *handler) {
     free(ewmh);
     goto fail;
   }
-  handler->screen = screen;
-  handler->conn = conn;
-  handler->root = &root; // Set root root
-  handler->modifier_mask = 0;
-  handler->focus_ctx = x11_focus_init(conn, ewmh);
+  /* handler->focus_ctx = x11_focus_init(conn, ewmh); */
   handler->ewmh = ewmh;
 
   if (!handler->focus_ctx)
@@ -416,8 +414,8 @@ bool input_handler_handle_event(InputHandler *handler,
     LOG("[IH-RELEASE]  release: code=%u, state=0x%x, globstate=0x%x",
         kr->detail, kr->state, handler->modifier_mask);
 
-    /* menu_manager_handle_key_release(handler->menu_manager, kr); TODO maybe
-     * later*/
+    /* menu_manager_handle_key_release(handler->menu_manager, kr); TODO
+     * maybe later*/
     if (is_modifier_release(kr->state, kr->detail)) {
       LOG("[IH-RELEASE] Exiting because modifier release");
       if (handler->menu_manager->active_menu) {
@@ -435,13 +433,14 @@ bool input_handler_handle_event(InputHandler *handler,
   }
 }
 
-bool input_handler_add_menu(InputHandler *handler, MenuConfig *config) {
+Menu *input_handler_add_menu(InputHandler *handler, MenuConfig *config) {
   if (!handler || !config)
     return false;
   LOG("[HANDLER->MANAGER] Adding menu: [%s]", config->title);
-  menu_manager_register(handler->menu_manager, menu_create(config));
+  Menu *menu = menu_create(config);
+  menu_manager_register(handler->menu_manager, menu);
   // TODO free (config)?
-  return true;
+  return menu;
 }
 
 // TODO any use?

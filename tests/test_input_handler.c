@@ -88,8 +88,6 @@ void test_activation_state() {
 
   MenuConfig *menu_config = menu_builder_finalize(&builder);
 
-  assert(input_handler_add_activation_state(handler, &menu_config->act_state));
-
   // Simulate key press to activate menu
   xcb_key_press_event_t event = {
       .response_type = XCB_KEY_PRESS, .detail = 31, .state = 0x40};

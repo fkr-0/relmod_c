@@ -44,7 +44,14 @@ bool window_filter_substring(const X11Window *window, const void *data);
 // Window operations
 void window_focus(xcb_connection_t *conn, xcb_window_t window);
 void window_raise(xcb_connection_t *conn, xcb_window_t window);
+uint32_t window_get_desktop(xcb_connection_t *conn, xcb_window_t window);
 void window_activate(xcb_connection_t *conn, xcb_window_t window);
 xcb_window_t window_get_focused(xcb_connection_t *conn);
+void focus_window(xcb_connection_t *connection, xcb_ewmh_connection_t ewmh,
+                  xcb_window_t window);
+void switch_to_window(xcb_connection_t *connection, xcb_window_t window);
+
+void switch_to_desktop(xcb_connection_t *connection, uint32_t desktop);
+xcb_window_t get_root_window(xcb_connection_t *connection);
 
 #endif // X11_WINDOW_H
