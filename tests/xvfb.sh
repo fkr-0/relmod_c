@@ -3,19 +3,20 @@
 setup_xvfb() {
   echo -e "${YELLOW}Setting up virtual X server...${NC}"
   export DISPLAY=:99
-  nohup Xvfb $DISPLAY -screen 0 1024x768x16 >/dev/null &
+  sudo nohup Xvfb $DISPLAY -screen 2 1024x768x16 >/dev/null &
   XVFB_PID=$!
-  sleep 1
+  sleep 2
+  pgrep -lfa Xvfb
 }
 
 # Cleanup X virtual framebuffer
 cleanup_xvfb() {
   if [ ! -z "$XVFB_PID" ]; then
     echo -e "${YELLOW}Cleaning up virtual X server...${NC}"
-    kill $XVFB_PID
+    sudo kill $XVFB_PID
   else
     echo -e "${YELLOW}No virtual X server PID to cleanup, using pkill${NC}"
-    pkill Xvfb
+    sudo pkill Xvfb
   fi
 }
 
@@ -26,6 +27,8 @@ usage() {
   echo "  -s, --setup     Setup X virtual framebuffer"
   echo "  -c, --cleanup   Cleanup X virtual framebuffer"
 }
+
+[ -z "$1" ] && usage && exit 1
 
 # Parse command line arguments
 while [ "$1" != "" ]; do
