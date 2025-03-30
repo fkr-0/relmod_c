@@ -27,15 +27,17 @@ jobs:
           name: Build Debug and Run Tests
           command: |
             export DISPLAY=:99
-            pwd
-            ls
             sh tests/xvfb.sh -s
-            make debug
-            make tests
+            DISPLAY=:99 make
+            DISPLAY=:99 make tests
             sh tests/xvfb.sh -c
       - run:
           name: Generate Test Coverage Report
-          command: make test-coverage
+          command: |
+            export DISPLAY=:99
+            sh tests/xvfb.sh -s
+            DISPLAY=:99 make test-coverage
+            sh tests/xvfb.sh -c
       - store_artifacts:
           path: coverage
           destination: coverage
