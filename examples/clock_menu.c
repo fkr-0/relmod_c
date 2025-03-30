@@ -1,8 +1,8 @@
 /* clock_menu.c - Example dynamic clock menu implementation */
 #include "../src/menu.h"
 #include "../src/cairo_menu.h"
-#include <stdio.h>
-#include <stdlib.h>
+#include "../src/menu_manager.h"
+#include "../src/input_handler.h"
 #include <string.h>
 #include <time.h>
 #include <sys/time.h>
@@ -44,15 +44,15 @@ static void update_clock_labels(ClockData* data) {
 static ClockData* clock_data_create(void) {
     ClockData* data = calloc(1, sizeof(ClockData));
     if (!data) return NULL;
-    
+
     data->label_count = FORMAT_COUNT;
     data->time_labels = calloc(data->label_count, sizeof(char*));
-    
+
     if (!data->time_labels) {
         free(data);
         return NULL;
     }
-    
+
     /* Allocate and initialize time labels */
     for (size_t i = 0; i < data->label_count; i++) {
         data->time_labels[i] = calloc(MAX_TIME_LEN, sizeof(char));
@@ -65,25 +65,25 @@ static ClockData* clock_data_create(void) {
             return NULL;
         }
     }
-    
+
     /* Initial update */
     update_clock_labels(data);
     gettimeofday(&data->last_update, NULL);
-    
+
     return data;
 }
 
 /* Clean up clock data */
 static void clock_data_destroy(ClockData* data) {
     if (!data) return;
-    
+
     if (data->time_labels) {
         for (size_t i = 0; i < data->label_count; i++) {
             free(data->time_labels[i]);
         }
         free(data->time_labels);
     }
-    
+
     free(data);
 }
 
@@ -97,10 +97,10 @@ static void clock_action(void* user_data) {
 static void clock_update(Menu* menu, void* user_data) {
     if (!menu || !user_data) return;
     ClockData* data = (ClockData*)user_data;
-    
+
     /* Update time labels */
     update_clock_labels(data);
-    
+
     /* Update menu items */
     for (size_t i = 0; i < data->label_count; i++) {
         menu->config.items[i].label = data->time_labels[i];
@@ -112,14 +112,14 @@ Menu* create_clock_menu(xcb_connection_t* conn, xcb_window_t root) {
     /* Create and initialize clock data */
     ClockData* data = clock_data_create();
     if (!data) return NULL;
-    
+
     /* Create menu items */
     MenuItem* items = calloc(FORMAT_COUNT, sizeof(MenuItem));
     if (!items) {
         clock_data_destroy(data);
         return NULL;
     }
-    
+
     /* Initialize menu items */
     for (size_t i = 0; i < FORMAT_COUNT; i++) {
         items[i] = (MenuItem){
@@ -129,7 +129,7 @@ Menu* create_clock_menu(xcb_connection_t* conn, xcb_window_t root) {
             .metadata = NULL
         };
     }
-    
+
     /* Configure menu */
     MenuConfig config = {
         .mod_key = XCB_MOD_MASK_4,    /* Super key */
@@ -155,23 +155,29 @@ Menu* create_clock_menu(xcb_connection_t* conn, xcb_window_t root) {
             .padding = 10
         }
     };
-    
+
     /* Create menu */
-    menu_setup_cairo(conn, root, &config);
+    InputHandler* handler = input_handler_create();
+    input_handler_setup_x(handler);
+    Menu* menu = cairo_menu_init(&config);
+    menu_setup_cairo(handler->conn, handler->screen->root, handler->focus_ctx,
+                    handler->screen, menu);
     free(items);  /* Menu creates its own copy */
-    
-    if (!menu) {
+
+    if (!menu || !menu_cairo_is_setup(menu)) {
+        input_handler_destroy(handler);
         clock_data_destroy(data);
         return NULL;
     }
-    
+
     /* Set up menu callbacks */
     menu->update_cb = clock_update;
     menu->user_data = data;
-    
+
     /* Configure update interval (1 second) */
     menu_set_update_interval(menu, 1000);
-    
+    input_handler_destroy(handler);
+
     return menu;
 }
 
@@ -182,25 +188,25 @@ int main(void) {
         fprintf(stderr, "Failed to connect to X server\n");
         return 1;
     }
-    
+
     xcb_screen_t* screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
     Menu* menu = create_clock_menu(conn, screen->root);
-    
+
     if (!menu) {
         fprintf(stderr, "Failed to create clock menu\n");
         xcb_disconnect(conn);
         return 1;
     }
-    
+
     printf("Clock menu created successfully\n");
     printf("Press Super+C to show clock\n");
-    
+
     // Menu would be registered with menu manager here
     // menu_manager_register(manager, menu);
-    
+
     // Cleanup for test
     menu_destroy(menu);
     xcb_disconnect(conn);
-    
+
     return 0;
 }

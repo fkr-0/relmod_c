@@ -1,6 +1,8 @@
 /* system_monitor_menu.c - Example system monitor menu implementation */
 #include "../src/menu.h"
 #include "../src/cairo_menu.h"
+#include "../src/menu_manager.h"
+#include "../src/input_handler.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,7 +27,7 @@ typedef struct {
     SystemInfo info;
     MenuItem* items;
     size_t item_count;
-    unsigned int update_interval;  /* milliseconds */
+    unsigned int update_interval;
 } SystemMenuData;
 
 /* Read CPU usage from /proc/stat */
@@ -33,7 +35,7 @@ static float get_cpu_usage(void) {
     static long prev_idle = 0, prev_total = 0;
     long idle = 0, total = 0;
     float usage = 0.0;
-    
+
     FILE* fp = fopen("/proc/stat", "r");
     if (fp) {
         char line[256];
@@ -41,22 +43,22 @@ static float get_cpu_usage(void) {
             long user, nice, system, idle_time, iowait, irq, softirq;
             sscanf(line, "cpu %ld %ld %ld %ld %ld %ld %ld",
                    &user, &nice, &system, &idle_time, &iowait, &irq, &softirq);
-            
+
             idle = idle_time + iowait;
             total = user + nice + system + idle + irq + softirq;
-            
+
             if (prev_total != 0) {
                 long diff_idle = idle - prev_idle;
                 long diff_total = total - prev_total;
                 usage = (1.0 - (float)diff_idle / diff_total) * 100.0;
             }
-            
+
             prev_idle = idle;
             prev_total = total;
         }
         fclose(fp);
     }
-    
+
     return usage;
 }
 
@@ -75,15 +77,14 @@ static float get_memory_usage(void) {
 static unsigned int get_process_count(void) {
     DIR* dir = opendir("/proc");
     unsigned int count = 0;
-    
+
     if (dir) {
         struct dirent* entry;
         while ((entry = readdir(dir))) {
-            // Check if entry is a directory and name is numeric (PID)
             struct stat st;
             char path[256];
             snprintf(path, sizeof(path), "/proc/%s", entry->d_name);
-            
+
             if (stat(path, &st) == 0 && S_ISDIR(st.st_mode)) {
                 char* endptr;
                 strtol(entry->d_name, &endptr, 10);
@@ -92,7 +93,7 @@ static unsigned int get_process_count(void) {
         }
         closedir(dir);
     }
-    
+
     return count;
 }
 
@@ -100,10 +101,10 @@ static unsigned int get_process_count(void) {
 static char* get_top_process(void) {
     static char name[256];
     FILE* fp = popen("ps -aux --sort=-pcpu | head -n 2 | tail -n 1 | awk '{print $11}'", "r");
-    
+
     if (fp) {
         if (fgets(name, sizeof(name), fp)) {
-            name[strcspn(name, "\n")] = 0;  // Remove newline
+            name[strcspn(name, "\n")] = 0;
         } else {
             strcpy(name, "Unknown");
         }
@@ -111,7 +112,7 @@ static char* get_top_process(void) {
     } else {
         strcpy(name, "Unknown");
     }
-    
+
     return name;
 }
 
@@ -128,15 +129,15 @@ static void update_menu_items(SystemMenuData* data) {
     char* labels[] = {
         malloc(64), malloc(64), malloc(64), malloc(64)
     };
-    
+
     snprintf(labels[0], 64, "CPU: %.1f%%", data->info.cpu_usage);
     snprintf(labels[1], 64, "Memory: %.1f%%", data->info.mem_usage);
     snprintf(labels[2], 64, "Processes: %u", data->info.proc_count);
     snprintf(labels[3], 64, "Top: %s", data->info.top_process);
-    
+
     for (size_t i = 0; i < 4; i++) {
         data->items[i].label = labels[i];
-        if (i > 0) free((char*)data->items[i].label);  // Free old label
+        if (i > 0) free((char*)data->items[i].label);
     }
 }
 
@@ -149,16 +150,16 @@ static void system_menu_action(void* user_data) {
 Menu* create_system_monitor_menu(xcb_connection_t* conn, xcb_window_t root) {
     SystemMenuData* data = calloc(1, sizeof(SystemMenuData));
     if (!data) return NULL;
-    
-    data->update_interval = 1000;  // 1 second update
+
+    data->update_interval = 1000;
     data->item_count = 4;
     data->items = calloc(data->item_count, sizeof(MenuItem));
-    
+
     if (!data->items) {
         free(data);
         return NULL;
     }
-    
+
     // Initialize items
     for (size_t i = 0; i < data->item_count; i++) {
         data->items[i].id = malloc(32);
@@ -166,28 +167,40 @@ Menu* create_system_monitor_menu(xcb_connection_t* conn, xcb_window_t root) {
         data->items[i].action = system_menu_action;
         data->items[i].metadata = data;
     }
-    
+
     // Initial update
     update_system_info(&data->info);
     update_menu_items(data);
-    
+
     MenuConfig config = {
-        .mod_key = XCB_MOD_MASK_4,    /* Super key */
-        .trigger_key = 39,             /* 's' key */
+        .mod_key = XCB_MOD_MASK_4,
+        .trigger_key = 39,
         .title = "System Monitor",
         .items = data->items,
         .item_count = data->item_count,
         .nav = {
-            .next = { .key = 44, .label = "j" },  /* j key */
-            .prev = { .key = 45, .label = "k" }   /* k key */
+            .next = { .key = 44, .label = "j" },
+            .prev = { .key = 45, .label = "k" }
         },
         .act = {
             .activate_on_mod_release = false,
             .activate_on_direct_key = false
         }
     };
-    
-    menu_setup_cairo(conn, root, &config);
+
+    InputHandler* handler = input_handler_create();
+    input_handler_setup_x(handler);
+    Menu* menu = cairo_menu_init(&config);
+
+    if (!menu || !menu_cairo_is_setup(menu)) {
+        input_handler_destroy(handler);
+        return NULL;
+    }
+
+    menu_setup_cairo(handler->conn, handler->screen->root, handler->focus_ctx,
+                    handler->screen, menu);
+    input_handler_destroy(handler);
+    return menu;
 }
 
 /* Example usage */
@@ -197,24 +210,24 @@ int main(void) {
         fprintf(stderr, "Failed to connect to X server\n");
         return 1;
     }
-    
+
     xcb_screen_t* screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
     Menu* menu = create_system_monitor_menu(conn, screen->root);
-    
+
     if (!menu) {
         fprintf(stderr, "Failed to create system monitor menu\n");
         xcb_disconnect(conn);
         return 1;
     }
-    
+
     printf("System monitor menu created.\n");
     printf("Press Super+S to show menu.\n");
-    
+
     // Main event loop would go here
-    
+
     // Cleanup
     menu_destroy(menu);
     xcb_disconnect(conn);
-    
+
     return 0;
 }
