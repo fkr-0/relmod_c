@@ -19,7 +19,7 @@ setup_xvfb() {
   fi
 
   # Start Xvfb with tighter error handling
-  Xvfb $DISPLAY -screen 0 1024x768x16 -ac -nolisten tcp &
+  sudo Xvfb $DISPLAY -screen 0 1024x768x16 -ac -nolisten tcp &
   XVFB_PID=$!
 
   # Wait for Xvfb to be ready
@@ -63,14 +63,13 @@ usage() {
   echo "  -c, --cleanup   Cleanup X virtual framebuffer"
 }
 
-
 # Main execution
 case "$1" in
-  -s |-setup) setup_xvfb ;;
-  -c|--cleanup) cleanup_xvfb ;;
-  -h|--help) usage ;;
-  *)
-    usage >&2
-    exit 1
-    ;;
+-s | -setup) setup_xvfb ;;
+-c | --cleanup) cleanup_xvfb ;;
+-h | --help) usage ;;
+*)
+  usage >&2
+  exit 1
+  ;;
 esac
