@@ -4,23 +4,30 @@ A flexible and extensible menu system for X11 window managers, supporting config
 
 ## Features
 
-- **Configurable Menus**
-  - Mod+key activation combinations
-  - Custom navigation keys (j/k, arrow keys)
-  - Direct item selection (1-4)
-  - Configurable appearance
+- **Configurable Menus**  
+  - Mod+key activation combinations  
+  - Custom navigation keys (j/k, arrow keys)  
+  - Direct item selection (1-4)  
+  - Configurable appearance with advanced effects  
 
-- **Smooth Integration**
-  - X11/XCB-based implementation
-  - Cairo rendering for smooth graphics
-  - Efficient event handling
-  - Memory-conscious design
+- **Enhanced Visuals**  
+  - Smooth animations (fade, slide, zoom)  
+  - Gradient backgrounds and shadows  
+  - Rounded corners and subtle highlights  
+  - Anti-aliased text rendering  
 
-- **Extensible Architecture**
-  - Modular component design
-  - Custom menu creation API
-  - Plugin-style menu registration
-  - Future-ready for nested menus
+- **Window Management**  
+  - Sticky window support  
+  - Automatic positioning  
+  - Multi-monitor aware  
+  - Focus handling  
+
+- **Extensible Architecture**  
+  - Modular component design  
+  - Custom menu creation API  
+  - Plugin-style menu registration  
+  - Animation system with custom sequences  
+  - Future-ready for nested menus  
 
 ## Quick Start
 
@@ -69,10 +76,12 @@ menu_manager_register(manager, menu);
 ```mermaid
 graph TD
     A[Menu Manager] --> B[Menu]
-    B --> C[Cairo Renderer]
+    B --> C[Cairo Renderer]  
     B --> D[Input Handler]
-    A --> E[Event Loop]
-    E --> D
+    B --> E[Animation System]
+    B --> F[Window Manager]
+    A --> G[Event Loop]
+    G --> D
 ```
 
 Key components:
@@ -80,6 +89,8 @@ Key components:
 - **Menu**: Core menu implementation and state management
 - **Cairo Renderer**: Smooth graphics rendering
 - **Input Handler**: X11 event processing
+- **Animation System**: Configurable show/hide animations  
+- **Window Manager**: Handles positioning and focus
 - **Event Loop**: Main program loop
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed design documentation.

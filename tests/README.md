@@ -7,6 +7,7 @@ This directory contains the comprehensive test suite for the menu system. It inc
 ### Unit Tests
 - `test_menu.c`: Tests core menu functionality
 - `test_menu_manager.c`: Tests menu management and lifecycle
+- `test_animation.c`: Tests animation system and sequences
 
 ### Integration Tests
 - `test_integration.c`: Tests component interactions and workflows
@@ -14,6 +15,7 @@ This directory contains the comprehensive test suite for the menu system. It inc
 ### Performance Tests
 - `test_performance.c`: Benchmarks critical operations
 - Measures response times and throughput
+- Includes animation performance metrics
 
 ### Memory Tests
 - `test_memory.c`: Tracks memory usage and detects leaks
@@ -30,6 +32,7 @@ This directory contains the comprehensive test suite for the menu system. It inc
 make test-menu
 make test-menu_manager
 make test-integration
+make test-animation
 make test-performance
 make test-memory
 ```
@@ -119,6 +122,7 @@ make bench-input
 - Navigation response time
 - Input handling latency
 - Memory allocation patterns
+- Animation frame timing
 
 ## Test Development
 

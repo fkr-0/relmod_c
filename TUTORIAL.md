@@ -294,6 +294,24 @@ Once implemented, the home directory browser menu can be used:
 3. Press Enter to open selected item
 4. Press Escape to dismiss
 
+## Adding Animations to Your Menu
+
+The menu system supports configurable animations for showing and hiding menus:
+
+```c
+// Set basic fade animation (200ms duration)
+cairo_menu_set_animation(menu, 
+    MENU_ANIM_FADE,    // Show animation
+    MENU_ANIM_FADE,    // Hide animation
+    200.0);            // Duration in ms
+
+// Create a custom animation sequence
+MenuAnimationSequence* seq = menu_animation_sequence_create();
+menu_animation_sequence_add(seq, menu_animation_fade_in(100));
+menu_animation_sequence_add(seq, menu_animation_slide_in(MENU_ANIM_SLIDE_RIGHT, 100));
+cairo_menu_set_show_sequence(menu, seq);
+```
+
 ## Best Practices
 
 1. **Resource Management**

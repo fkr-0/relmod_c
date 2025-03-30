@@ -14,6 +14,7 @@ classDiagram
         -activeMenu: Menu*
         +register(Menu* menu)
         +activate(ModKey, TriggerKey)
+        +handleAnimationEvents()
         +deactivate()
         +handleInput(KeyEvent)
     }
@@ -26,6 +27,7 @@ classDiagram
         +hide()
         +handleInput()
         +render()
+        +updateAnimations()
     }
 
     MenuManager --> Menu: manages
@@ -35,6 +37,7 @@ The MenuManager is responsible for:
 - Maintaining single menu focus
 - Handling menu activation/deactivation
 - Routing input events
+- Managing animation events
 - Managing menu lifecycle states
 
 ### 2. Core Menu Types
@@ -159,6 +162,30 @@ bool menu_handle_input(Menu* menu, InputEvent* event) {
 
 ## Rendering System
 
+### Animation Pipeline
+```c
+typedef struct {
+    MenuAnimation* show_animation;
+    MenuAnimation* hide_animation; 
+    MenuAnimationSequence* show_sequence;
+    MenuAnimationSequence* hide_sequence;
+    struct timeval last_frame;
+    bool is_animating;
+} MenuAnimationData;
+
+// Animation types
+typedef enum {
+    MENU_ANIM_FADE,
+    MENU_ANIM_SLIDE_RIGHT,
+    MENU_ANIM_SLIDE_LEFT,
+    MENU_ANIM_SLIDE_UP,
+    MENU_ANIM_SLIDE_DOWN,
+    MENU_ANIM_ZOOM
+} MenuAnimationType;
+```
+
+The animation system supports configurable show/hide animations with timing control.
+
 The menu rendering system uses Cairo for graphics:
 
 ```c
@@ -180,7 +207,20 @@ typedef struct {
     double font_size;
     int item_height;
     int padding;
+    double corner_radius;
+    double shadow_offset;
+    double shadow_color[4];
+    struct {
+        double start[4];
+        double end[4];
+    } gradient;
 } MenuStyle;
+```
+
+### Window Management
+```c
+void set_window_sticky(xcb_connection_t *conn, xcb_window_t window);
+int get_window_absolute_geometry(xcb_connection_t *conn, xcb_window_t window);
 ```
 
 ## Extension Points
@@ -188,6 +228,7 @@ typedef struct {
 1. **Navigation Extensions**
    - Custom key bindings
    - Additional navigation modes
+   - Animation timing controls
    - Search/filter functionality
 
 2. **Activation Behavior**
