@@ -13,6 +13,7 @@ jobs:
       - image: cimg/deploy:2025.01 # Use the official CircleCI GCC image
     steps:
       - checkout
+
       - run:
           name: Install dependencies
           command: |
@@ -27,6 +28,8 @@ jobs:
           name: Build Debug and Run Tests
           command: |
             export DISPLAY=:99
+            echo "export DISPLAY=:99" >> "$BASH_ENV"
+            source "$BASH_ENV"
             sh tests/xvfb.sh -s
             DISPLAY=:99 make
             DISPLAY=:99 make tests
@@ -35,6 +38,8 @@ jobs:
           name: Generate Test Coverage Report
           command: |
             export DISPLAY=:99
+            echo "export DISPLAY=:99" >> "$BASH_ENV"
+            source "$BASH_ENV"
             sh tests/xvfb.sh -s
             DISPLAY=:99 make test-coverage
             sh tests/xvfb.sh -c
