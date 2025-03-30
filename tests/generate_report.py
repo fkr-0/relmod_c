@@ -8,6 +8,9 @@ Generates detailed HTML reports from test results, including:
 - Performance benchmarks
 - Code coverage
 - Memory analysis
+
+Log files are results of running the following tools:
+
 """
 
 import sys
@@ -67,6 +70,7 @@ REPORT_TEMPLATE = """
 </html>
 """
 
+
 class TestResult:
     def __init__(self, name: str, passed: bool, duration: float, details: str = ""):
         self.name = name
@@ -74,11 +78,13 @@ class TestResult:
         self.duration = duration
         self.details = details
 
+
 class PerformanceMetric:
     def __init__(self, name: str, value: float, unit: str):
         self.name = name
         self.value = value
         self.unit = unit
+
 
 class CoverageData:
     def __init__(self, file: str, line: float, branch: float, function: float):
@@ -87,12 +93,13 @@ class CoverageData:
         self.branch = branch
         self.function = function
 
+
 def parse_test_output(log_file: str) -> List[TestResult]:
     """Parse test output log file into TestResult objects."""
     results = []
     current_test = None
-    
-    with open(log_file, 'r') as f:
+
+    with open(log_file, "r") as f:
         for line in f:
             if line.startswith("Running test:"):
                 if current_test:
@@ -107,17 +114,18 @@ def parse_test_output(log_file: str) -> List[TestResult]:
                     current_test.duration = float(line.split(":")[1].strip().split()[0])
                 except ValueError:
                     pass
-    
+
     if current_test:
         results.append(current_test)
-    
+
     return results
+
 
 def parse_performance_output(perf_log: str) -> List[PerformanceMetric]:
     """Parse performance benchmark output."""
     metrics = []
-    
-    with open(perf_log, 'r') as f:
+
+    with open(perf_log, "r") as f:
         for line in f:
             if "Average" in line:
                 parts = line.split(":")
@@ -129,14 +137,15 @@ def parse_performance_output(perf_log: str) -> List[PerformanceMetric]:
                         metrics.append(PerformanceMetric(name, value, unit))
                     except (ValueError, IndexError):
                         pass
-    
+
     return metrics
+
 
 def parse_coverage(coverage_file: str) -> List[CoverageData]:
     """Parse gcov coverage data."""
     coverage = []
-    
-    with open(coverage_file, 'r') as f:
+
+    with open(coverage_file, "r") as f:
         for line in f:
             if "File" in line:
                 file = line.split()[-1]
@@ -148,17 +157,20 @@ def parse_coverage(coverage_file: str) -> List[CoverageData]:
                     coverage.append(CoverageData(file, lines, branches, functions))
                 except (StopIteration, ValueError, IndexError):
                     pass
-    
+
     return coverage
 
-def generate_summary(unit_tests: List[TestResult],
-                    integration_tests: List[TestResult],
-                    performance: List[PerformanceMetric],
-                    coverage: List[CoverageData]) -> str:
+
+def generate_summary(
+    unit_tests: List[TestResult],
+    integration_tests: List[TestResult],
+    performance: List[PerformanceMetric],
+    coverage: List[CoverageData],
+) -> str:
     """Generate HTML summary section."""
     total_tests = len(unit_tests) + len(integration_tests)
     passed_tests = sum(1 for t in unit_tests + integration_tests if t.passed)
-    
+
     return f"""
     <table>
         <tr>
@@ -186,6 +198,7 @@ def generate_summary(unit_tests: List[TestResult],
     </table>
     """
 
+
 def generate_test_table(tests: List[TestResult], title: str) -> str:
     """Generate HTML table for test results."""
     return f"""
@@ -210,29 +223,57 @@ def generate_test_table(tests: List[TestResult], title: str) -> str:
     </table>
     """
 
+
+HELPTXT = """
+    Generate detailed HTML reports from test results.
+    =================================================
+    Arguments:
+    unit_log: Path to unit test log file
+    integration_log: Path to integration test log file
+    performance_log: Path to performance benchmark log file
+    coverage_log: Path to code coverage log file
+    Result:
+    files at given locations
+
+    Usage: Create the log files by running the tests and benchmarks:
+
+    ./unit_tests > unit_test.log
+    ./integration_tests > integration_test.log
+    ./performance > performance.log
+    ./coverage > coverage.log
+
+    Then generate the report with the following command
+
+    ./generate_report.py unit_test.log integration_test.log performance.log coverage.log
+
+    """
+
+
 def main():
     # Parse command line arguments for log files
     if len(sys.argv) < 5:
-        print("Usage: generate_report.py <unit_log> <integration_log> "
-              "<performance_log> <coverage_log>")
+        print(
+            "Usage: generate_report.py <unit_log> <integration_log> "
+            "<performance_log> <coverage_log>"
+        )
         sys.exit(1)
-    
+
     unit_log = sys.argv[1]
     integration_log = sys.argv[2]
     performance_log = sys.argv[3]
     coverage_log = sys.argv[4]
-    
+
     # Parse log files
     unit_tests = parse_test_output(unit_log)
     integration_tests = parse_test_output(integration_log)
     performance = parse_performance_output(performance_log)
     coverage = parse_coverage(coverage_log)
-    
+
     # Generate report sections
     summary = generate_summary(unit_tests, integration_tests, performance, coverage)
     unit_table = generate_test_table(unit_tests, "Unit Tests")
     integration_table = generate_test_table(integration_tests, "Integration Tests")
-    
+
     # Generate full report
     report = REPORT_TEMPLATE.format(
         summary=summary,
@@ -240,14 +281,15 @@ def main():
         integration_tests=integration_table,
         performance=generate_performance_charts(performance),
         coverage=generate_coverage_charts(coverage),
-        memory="Memory analysis not available"
+        memory="Memory analysis not available",
     )
-    
+
     # Write report to file
     with open("test_report.html", "w") as f:
         f.write(report)
-    
+
     print("Report generated: test_report.html")
+
 
 if __name__ == "__main__":
     main()

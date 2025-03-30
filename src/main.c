@@ -2,7 +2,7 @@
 #include "input_handler.h"
 #include "key_helper.h"
 #include "menu_builder.h"
-#include "menu_manager.h"
+#include "version.h"
 #include "window_menu.h"
 #include "x11_window.h"
 #include <stdio.h>
@@ -112,7 +112,7 @@ static MenuConfig rebuild_menu_config(WindowMenu *wm, uint16_t mod_key,
 /*   return config; */
 /* } */
 int main(int argc, char *argv[]) {
-  printf("===== Menu Demo =====\n");
+  printf("===== relmod_c v%s =====\n", VERSION);
   printf("argc: %d\n", argc);
   // loop over argv
   for (int i = 0; i < argc; i++) {
@@ -130,7 +130,7 @@ int main(int argc, char *argv[]) {
 
   InputHandler *handler = input_handler_create();
   input_handler_setup_x(handler);
-  LOG("handler->connection: %p", handler->conn);
+  LOG("handler->connection: %p", (void *)handler->conn);
 
   /* MenuConfig *config = create_menu_config(); */
 

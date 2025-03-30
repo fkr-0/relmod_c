@@ -66,7 +66,7 @@ TEST_BINS  := $(patsubst $(TEST_DIR)/%.c, $(TEST_BUILD_DIR)/%, $(TEST_SRCS))
 TEST_DEPS  := $(TEST_OBJS:.o=.d)
 
 # Main binary target
-MAIN := $(BUILD_DIR)/menu_system
+MAIN := $(BUILD_DIR)/rel_mod
 
 # Default target: validate version and build main binary
 all: validate_version $(MAIN)

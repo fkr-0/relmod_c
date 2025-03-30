@@ -56,26 +56,28 @@ int get_window_absolute_geometry(xcb_connection_t *conn, xcb_window_t window) {
   return x > 1900 ? 1 : 0;
 }
 
-static int get_desktop_x(xcb_connection_t *conn) {
-  // Get the active window ID
-  xcb_window_t active_window = window_get_focused(conn);
-  get_window_absolute_geometry(conn, active_window);
-  if (active_window == XCB_NONE) {
-    return -1;
-  }
+/* static int get_desktop_x(xcb_connection_t *conn) { */
+/*   // Get the active window ID */
+/*   xcb_window_t active_window = window_get_focused(conn); */
+/*   get_window_absolute_geometry(conn, active_window); */
+/*   if (active_window == XCB_NONE) { */
+/*     return -1; */
+/*   } */
 
-  // Get the geometry of the active window
-  xcb_get_geometry_cookie_t cookie = xcb_get_geometry(conn, active_window);
-  xcb_get_geometry_reply_t *reply = xcb_get_geometry_reply(conn, cookie, NULL);
-  if (!reply) {
-    return -1;
-  }
+/*   // Get the geometry of the active window */
+/*   xcb_get_geometry_cookie_t cookie = xcb_get_geometry(conn, active_window);
+ */
+/*   xcb_get_geometry_reply_t *reply = xcb_get_geometry_reply(conn, cookie,
+ * NULL); */
+/*   if (!reply) { */
+/*     return -1; */
+/*   } */
 
-  // Calculate the x-coordinate of the active window
-  int desktop_x = reply->x;
-  free(reply);
-  return desktop_x;
-}
+/*   // Calculate the x-coordinate of the active window */
+/*   int desktop_x = reply->x; */
+/*   free(reply); */
+/*   return desktop_x; */
+/* } */
 static int get_active_window_top_right_corner(xcb_connection_t *conn) {
   // Get the active window ID
   xcb_window_t active_window = window_get_focused(conn);

@@ -113,23 +113,23 @@ fail:
   }
   if (handler->menu_manager)
     menu_manager_destroy(handler->menu_manager);
-  if (handler->focus_ctx)
-    x11_focus_cleanup(handler->focus_ctx);
+  /* if (handler->focus_ctx) */
+  /*   x11_focus_cleanup(handler->focus_ctx); */
 
-  if (ewmh) {
-    xcb_ewmh_connection_wipe(ewmh);
-  }
-  if (ewmh) {
-    free(ewmh);
-  }
-  if (conn) {
-    xcb_disconnect(conn);
-    free(conn);
-  }
-  if (handler->menu_manager) {
-    free(handler->menu_manager);
-    free(handler);
-  }
+  /* if (ewmh) { */
+  /*   xcb_ewmh_connection_wipe(ewmh); */
+  /* } */
+  /* if (ewmh) { */
+  /*   free(ewmh); */
+  /* } */
+  /* if (conn) { */
+  /*   xcb_disconnect(conn); */
+  /*   free(conn); */
+  /* } */
+  /* if (handler->menu_manager) { */
+  /*   free(handler->menu_manager); */
+  /*   free(handler); */
+  /* } */
   return;
 fail_focus:
   x11_release_inputs(handler->focus_ctx);
@@ -249,7 +249,7 @@ void input_handler_destroy(InputHandler *handler) {
   LOG("[DESTROY] Destroying input handler:menumgr");
   if (handler->menu_manager) {
     LOG("[DESTROY] Destroying menu manager");
-    menu_manager_destroy(handler->menu_manager);
+    /* menu_manager_destroy(handler->menu_manager); */
   }
 
   /* if (handler->screen) { */
@@ -260,6 +260,7 @@ void input_handler_destroy(InputHandler *handler) {
     // valid connection?
     if (xcb_connection_has_error(handler->conn)) {
       LOG("[DESTROY] Connection error detected");
+
     } else {
 
       xcb_disconnect(handler->conn);
@@ -270,8 +271,9 @@ void input_handler_destroy(InputHandler *handler) {
     free(handler->activation_states);
   }
   LOG("[DESTROY] Destroying input handler:handler");
-  if (handler)
-    free(handler);
+  free(handler);
+  /* if (handler) */
+  /*   free(handler); */
 }
 
 static bool update_callback(Menu *menu, struct timeval *last_update,

@@ -115,24 +115,32 @@ static void test_menu_workflow(void) {
   input_handler_setup_x(handler);
   printf("Input handler created: %p\n", handler);
 
-  static MenuItem items[] = {{.id = "item1",
-                              .label = "Item 1",
-                              .action = test_action,
-                              .metadata = "item1"},
-                             {.id = "item2",
-                              .label = "Item 2",
-                              .action = test_action,
-                              .metadata = "item2"},
-                             {.id = "item3",
-                              .label = "Item 3",
-                              .action = test_action,
-                              .metadata = "item3"}};
+  /* static MenuItem items[] = {{.id = "item1", */
+  /*                             .label = "Item 1", */
+  /*                             .action = test_action, */
+  /*                             .metadata = "item1"}, */
+  /*                            {.id = "item2", */
+  /*                             .label = "Item 2", */
+  /*                             .action = test_action, */
+  /*                             .metadata = "item2"}, */
+  /*                            {.id = "item3", */
+  /*                             .label = "Item 3", */
+  /*                             .action = test_action, */
+  /*                             .metadata = "item3"}}; */
+  /* NavigationConfig nav = {.next = {.key = 44, .label = "j"}, */
+  /*                         .prev = {.key = 45, .label = "k"}, */
+  /*                         .direct = {.keys = NULL, .count = 0}, */
+  /*                         .extension_data = NULL}; */
 
-  MenuBuilder builder1 = menu_builder_create("Menu 1", 1);
-  menu_builder_add_item(&builder1, "Item 1", demo_action, "item1");
+  MenuBuilder builder1 = menu_builder_create("Menu 1", 3);
+  menu_builder_add_item(&builder1, "Item 1", test_action, "item1");
+  menu_builder_add_item(&builder1, "Item 2", test_action, "item2");
+  menu_builder_add_item(&builder1, "Item 3", test_action, "item3");
   menu_builder_set_mod_key(&builder1, XCB_MOD_MASK_4);              // Super key
   menu_builder_set_trigger_key(&builder1, 31);                      // Space key
   menu_builder_set_activation_state(&builder1, XCB_MOD_MASK_4, 31); // Super + i
+  menu_builder_set_navigation_keys(&builder1, 44, "j", 45, "k", NULL,
+                                   0); // j, k
   MenuConfig *config1 = menu_builder_finalize(&builder1);
   printf("Menu config created: %p\n", config1);
 
@@ -151,7 +159,11 @@ static void test_menu_workflow(void) {
   assert(menu_manager_get_active(handler->menu_manager) == menu1);
 
   printf("2. Navigate down\n");
-  state = simulate_key_press(handler, 44, state); /* j press */
+  /* state = simulate_key_press(handler, 44, state);   /\* j press *\/ */
+  /* state = simulate_key_release(handler, 44, state); /\* j press *\/ */
+  state = simulate_key_press(handler, 44, state);   /* j press */
+  state = simulate_key_release(handler, 44, state); /* j press */
+  printf("Selected index: %d\n", menu1->selected_index);
   assert(menu1->selected_index == 1);
 
   printf("3. Navigate up\n");
@@ -227,26 +239,35 @@ static void test_menu_switching(void) {
 
   assert(input_handler_add_menu(handler, config1));
   assert(input_handler_add_menu(handler, config2));
-  Menu *menu1 = menu_manager_menu_index(handler->menu_manager, 0);
-  Menu *menu2 = menu_manager_menu_index(handler->menu_manager, 1);
+  Menu *menu1 = menu_manager_menu_index(handler->menu_manager, 1);
+  Menu *menu2 = menu_manager_menu_index(handler->menu_manager, 0);
 
   /* Test switching between menus */
 
   int state = 0;
-  /* Activate first menu */
-  state = simulate_key_press(handler, SUPER_KEY, 0);       /* Super down */
-  state = simulate_key_press(handler, 31, XCB_MOD_MASK_4); /* i press */
+  printf("1. Activate menu (Super+i)\n");
+  state = simulate_key_press(handler, SUPER_KEY, state); /* Super down */
+  state = simulate_key_press(handler, 31, state);        /* i press */
+  printf("Active menu: %s\n", menu1->config.title);
+  printf("Active menu: %s\n",
+         menu_manager_get_active(handler->menu_manager)->config.title);
+  assert(state == SUPER_MASK);
+  assert(menu_manager_get_active(handler->menu_manager) == menu1);
   assert(menu_manager_get_active(handler->menu_manager) == menu1);
 
   /* Switch to second menu */
-  state = simulate_key_release(handler, 31, XCB_MOD_MASK_4); /* i release */
+  /* state = simulate_key_release(handler, 31, XCB_MOD_MASK_4); /\* i release
+   * *\/ */
+  printf("2. Activate menu (Super+o)\n");
   state = simulate_key_press(handler, 32, XCB_MOD_MASK_4);   /* o press */
+  state = simulate_key_release(handler, 32, XCB_MOD_MASK_4); /* o press */
   assert(menu_manager_get_active(handler->menu_manager) == menu2);
 
   /* fprintf(stderr, "Active menu: %s\n", */
   /*         menu_manager_get_active(handler->menu_manager)); */
   /* Deactivate */
-  simulate_key_release(handler, SUPER_KEY, 0); /* Super up */
+  printf("3. Deactivate menu (Super up)\n");
+  state = simulate_key_release(handler, SUPER_KEY, state); /* Super up */
   assert(menu_manager_get_active(handler->menu_manager) == NULL);
 
   /* Clean up */

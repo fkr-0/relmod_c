@@ -10,22 +10,29 @@ version: 2.1
 jobs:
   build_and_test:
     docker:
-      - image: cimg/gcc:latest # Use the official CircleCI GCC image
+      - image: cimg/deploy:2025.01 # Use the official CircleCI GCC image
     steps:
       - checkout
       - run:
           name: Install dependencies
           command: |
             sudo apt-get update
-            sudo apt-get install -y lcov genhtml
+            sudo apt-get install -y lcov libxcb1-dev \
+            libxcb-ewmh-dev libcairo-dev libxcb-keysyms1-dev \
+            libxcb-util-dev libxcb-icccm4-dev xvfb
       - run:
           name: Clean previous builds
           command: make clean
       - run:
           name: Build Debug and Run Tests
           command: |
+            export DISPLAY=:99
+            pwd
+            ls
+            sh tests/xvfb.sh -s
             make debug
             make tests
+            sh tests/xvfb.sh -c
       - run:
           name: Generate Test Coverage Report
           command: make test-coverage
@@ -35,14 +42,16 @@ jobs:
 
   build_release:
     docker:
-      - image: cimg/gcc:latest
+      - image: cimg/deploy:2025.01
     steps:
       - checkout
       - run:
           name: Install dependencies
           command: |
             sudo apt-get update
-            sudo apt-get install -y lcov genhtml
+            sudo apt-get install -y lcov libxcb1-dev \
+            libxcb-ewmh-dev libcairo-dev libxcb-keysyms1-dev \
+            libxcb-util-dev libxcb-icccm4-dev xvfb
       - run:
           name: Clean previous builds
           command: make clean

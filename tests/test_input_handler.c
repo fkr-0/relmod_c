@@ -55,9 +55,9 @@ void test_input_handler_handle_key_fn() {
   assert(item);
 
   menu_config_destroy(menu_config);
-  input_handler_destroy(handler);
   xcb_ewmh_connection_wipe(&ewmh);
   xcb_disconnect(conn);
+  input_handler_destroy(handler);
   // Cleanup (after exit)
 }
 
@@ -91,11 +91,12 @@ void test_activation_state() {
   // Simulate key press to activate menu
   xcb_key_press_event_t event = {
       .response_type = XCB_KEY_PRESS, .detail = 31, .state = 0x40};
+  input_handler_add_menu(handler, menu_config);
   assert(input_handler_handle_activation(handler, event.state, event.detail));
 
-  input_handler_destroy(handler);
   xcb_ewmh_connection_wipe(&ewmh);
   xcb_disconnect(conn);
+  input_handler_destroy(handler);
 }
 
 int main() {

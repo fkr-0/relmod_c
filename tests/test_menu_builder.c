@@ -12,11 +12,10 @@ void test_basic_builder() {
   assert(menu_builder_add_item(&b, "C", dummy_action, NULL));
   assert(!menu_builder_add_item(&b, "D", dummy_action, NULL)); // over capacity
 
-  Menu *menu = menu_builder_finalize(&b);
+  MenuConfig *menu = menu_builder_finalize(&b);
   assert(menu != NULL);
-  assert(menu->config.item_count == 3);
+  assert(menu->item_count == 3);
   menu_builder_destroy(&b);
-  menu_destroy(menu);
 }
 
 #ifdef ENABLE_MENU_TOML
