@@ -2,7 +2,7 @@
 #define VERSION_H
 
 #ifndef VERSION
-#define VERSION "0.3.1"
+#define VERSION "0.3.3"
 #endif
 
 /* #define VERSION_MAJOR 0 */
