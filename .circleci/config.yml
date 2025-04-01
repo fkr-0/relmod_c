@@ -68,7 +68,7 @@ jobs:
           name: Build Release Version
           command: make release
       - store_artifacts:
-          path: rel_mod
+          path: build/rel_mod
           destination: binary
 
 workflows:
