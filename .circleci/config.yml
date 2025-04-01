@@ -84,4 +84,4 @@ workflows:
             branches:
               ignore: /.*/ # Run this job only on tagged commits
             tags:
-              only: /^v[0-9]+\.[0-9]+\.[0-9]+$$/
+              only: /^[0-9]+\.[0-9]+\.[0-9]+$$/
