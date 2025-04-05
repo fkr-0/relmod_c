@@ -11,8 +11,6 @@ jobs:
   build_and_test:
     docker:
       - image: cimg/deploy:2025.01 # Use the official CircleCI GCC image
-    environment:
-      DISPLAY: :99
     steps:
       - checkout
 
@@ -39,12 +37,8 @@ jobs:
       - run:
           name: Generate Test Coverage Report
           command: |
-            export DISPLAY=:99
-            echo "export DISPLAY=:99" >> "$BASH_ENV"
-            source "$BASH_ENV"
-            tests/xvfb.sh -s
-            DISPLAY=:99 make test-coverage
-            tests/xvfb.sh -c
+            make
+            make test-coverage
       - store_artifacts:
           path: coverage
           destination: coverage
