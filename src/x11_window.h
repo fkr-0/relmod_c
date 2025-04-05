@@ -51,11 +51,11 @@ substrings_filter_data(const char **substrings, size_t count) {
 }
 
 // Initialize/free window list
-WindowList *window_list_init(xcb_connection_t *conn);
+WindowList *window_list_init(xcb_connection_t *conn, xcb_ewmh_connection_t *ewmh);
 void window_list_free(WindowList *list);
 
 // Update window list
-void window_list_update(WindowList *list, xcb_connection_t *conn);
+void window_list_update(WindowList *list, xcb_connection_t *conn, xcb_ewmh_connection_t *ewmh);
 
 // Filter operations
 WindowList *window_list_filter(const WindowList *list, WindowFilterFn filter,

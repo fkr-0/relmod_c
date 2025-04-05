@@ -573,14 +573,6 @@ void cairo_menu_render_show(CairoMenuData *data) {
   cairo_menu_render_request_update(data);
 
   // Immediately render once
-  if (cairo_menu_render_needs_update(data)) {
-    cairo_menu_render_begin(data);
-    cairo_menu_render_clear(data, &data->menu->config.style);
-    cairo_menu_render_title(data, data->menu->config.title,
-                            &data->menu->config.style);
-    cairo_menu_render_items(data, data->menu);
-    cairo_menu_render_end(data);
-  }
   int x_pad = 20;
   int y_pad = 30;
   int height_pad = 0;
@@ -593,7 +585,11 @@ void cairo_menu_render_show(CairoMenuData *data) {
   /* int x = screen->width_in_pixels - width - 20; // Padding 20px */
   int x =
       get_window_absolute_geometry(data->conn, window_get_focused(data->conn));
+
+  LOG("Window absolute geometry: x=%d", x);
+
   x = (x * 1920) + x_pad;
+  LOG("Window x position: x=%d", x);
   int y = y_pad;
   int num_items = data->menu->config.item_count;
   int height = ((1 + num_items) * 42) + (2 * height_pad);
@@ -608,6 +604,15 @@ void cairo_menu_render_show(CairoMenuData *data) {
                        XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y |
                            XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT,
                        (const uint32_t[]){x, y, min_width, height});
+
+  if (cairo_menu_render_needs_update(data)) {
+    cairo_menu_render_begin(data);
+    cairo_menu_render_clear(data, &data->menu->config.style);
+    cairo_menu_render_title(data, data->menu->config.title,
+                            &data->menu->config.style);
+    cairo_menu_render_items(data, data->menu);
+    cairo_menu_render_end(data);
+  }
   cairo_menu_render_resize(data, min_width, height);
 }
 

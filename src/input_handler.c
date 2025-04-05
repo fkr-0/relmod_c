@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <sys/select.h>
 #include <sys/time.h>
+#include <unistd.h> // For usleep
 #include <xcb/xcb_ewmh.h>
 
 #ifdef MENU_DEBUG
@@ -13,11 +14,42 @@
 #endif
 #include "log.h"
 
-static bool is_modifier_release(uint16_t state, uint8_t keycode) {
-  return (state == 0x40 && keycode == 133) || // Super
-         (state == 0x08 && keycode == 64) ||  // Alt
-         (state == 0x04 && keycode == 37) ||  // Ctrl
-         (state == 0x01 && keycode == 50);    // Shift
+// Helper function to map keycodes to modifier masks
+static uint16_t keycode_to_modifier_mask(uint8_t keycode) {
+  if (keycode == 133)
+    return XCB_MOD_MASK_4; // Super/Mod4 typically
+  if (keycode == 64)
+    return XCB_MOD_MASK_1; // Alt/Mod1 typically
+  if (keycode == 37)
+    return XCB_MOD_MASK_CONTROL; // Ctrl
+  if (keycode == 50)
+    return XCB_MOD_MASK_SHIFT; // Shift
+  return 0;                    // Not a known modifier keycode
+}
+
+static uint16_t modifier_mask_to_keycode(uint16_t modifier) {
+  if (modifier == XCB_MOD_MASK_4)
+    return 133; // Super/Mod4 typically
+  if (modifier == XCB_MOD_MASK_1)
+    return 64; // Alt/Mod1 typically
+  if (modifier == XCB_MOD_MASK_CONTROL)
+    return 37; // Ctrl
+  if (modifier == XCB_MOD_MASK_SHIFT)
+    return 50; // Shift
+  return 0;    // Not a known modifier mask
+}
+
+// Checks if the released key corresponds to a modifier included in menu_mod
+static bool is_modifier_release(uint8_t keycode, uint16_t menu_mod) {
+  /* uint16_t menu_mod_keycode = modifier_mask_to_keycode(menu_mod); */
+  uint16_t released_mod_mask = keycode_to_modifier_mask(keycode);
+  // Check if the released key is a known modifier AND if that modifier is
+  // part of the menu_mod mask
+  LOG("[IH-RELEASE] released_mod_mask=0x%x, menu_mod=0x%x", released_mod_mask,
+      menu_mod);
+  /* return released_mod_mask != 0 && menu_mod == released_mod_mask; */
+  return released_mod_mask != 0 &&
+         (menu_mod & released_mod_mask) == released_mod_mask;
 }
 
 /* static bool match_key(Menu *menu, struct timeval *last_update, */
@@ -36,113 +68,122 @@ static bool is_modifier_release(uint16_t state, uint8_t keycode) {
 InputHandler *input_handler_create() {
   InputHandler *handler = calloc(1, sizeof(InputHandler));
   if (!handler) {
-    free(handler);
+    // calloc failed, handler is NULL, nothing to free
     return NULL;
   }
   handler->menu_manager = menu_manager_create();
+  if (!handler->menu_manager) {
+    free(handler); // Free handler if menu manager creation fails
+    return NULL;
+  }
   return handler;
 }
 
-void input_handler_setup_x(InputHandler *handler) {
-  xcb_connection_t *conn = xcb_connect(NULL, NULL);
-  if (xcb_connection_has_error(conn)) {
-    fprintf(stderr, "[ERROR] Failed to connect to X server\n");
-    goto fail;
+bool input_handler_setup_x(InputHandler *handler) {
+  xcb_connection_t *conn = NULL;
+  xcb_ewmh_connection_t *ewmh = NULL;
+  xcb_screen_t *screen = NULL;
+  xcb_window_t root = XCB_NONE;
+
+  // Retry connection logic for robustness, especially under Xvfb
+  int retries = 7;
+  conn = xcb_connect(NULL, NULL);
+  while ((!conn || xcb_connection_has_error(conn)) && retries-- > 0) {
+    if (conn)
+      xcb_disconnect(conn); // Disconnect previous failed attempt
+    conn = NULL;            // Ensure conn is NULL if connect fails below
+    fprintf(stderr,
+            "[WARN] Failed to connect to X server, retrying (%d left)...\n",
+            retries + 1);
+    usleep(500000); // Wait 500ms
+    conn = xcb_connect(NULL, NULL);
   }
 
-  xcb_screen_t *screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
-  xcb_window_t root = screen->root;
-  xcb_ewmh_connection_t *ewmh = calloc(1, sizeof(xcb_ewmh_connection_t));
+  if (!conn || xcb_connection_has_error(conn)) {
+    fprintf(stderr,
+            "[ERROR] Failed to connect to X server after multiple retries.\n");
+    if (conn)
+      xcb_disconnect(conn); // Clean up the last failed attempt
+    goto fail_conn;         // Use existing cleanup path
+  }
+
+  screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
+  if (!screen) {
+    fprintf(stderr, "[ERROR] Failed to get X screen\n");
+    goto fail_conn;
+  }
+  root = screen->root;
+
+  ewmh = calloc(1, sizeof(xcb_ewmh_connection_t));
   if (!ewmh) {
     fprintf(stderr, "[ERROR] Failed to allocate EWMH structure\n");
-    goto fail_conn; // jump to cleanup for connection
+    goto fail_conn;
   }
 
   if (!xcb_ewmh_init_atoms_replies(ewmh, xcb_ewmh_init_atoms(conn, ewmh),
                                    NULL)) {
     fprintf(stderr, "[ERROR] Failed to initialize EWMH\n");
-    xcb_ewmh_connection_wipe(ewmh);
-    free(ewmh);
     goto fail_conn;
   }
 
-  // Set up focus context and assign to handler
   handler->conn = conn;
   handler->screen = screen;
+  handler->ewmh = ewmh; // Assign early, cleanup logic will handle it
+
+  // Set up focus context and assign to handler
   handler->focus_ctx = x11_focus_init(conn, root, ewmh);
-  handler->modifier_mask = 0;
   if (!handler->focus_ctx) {
     fprintf(stderr, "[ERROR] Failed to create focus context\n");
-    goto fail_ewmh; // cleanup ewmh and connection
+    goto fail_ewmh;
   }
-  handler->ewmh = ewmh;
+
   handler->root = malloc(sizeof(xcb_window_t));
   if (!handler->root) {
     fprintf(stderr, "[ERROR] Failed to allocate memory for root\n");
     goto fail_focus;
   }
   *handler->root = root;
-  handler->root = &root; // Set root root
+  // Line 85: handler->root = &root; // REMOVED - was assigning stack address
 
-  if (!conn || root == XCB_NONE) {
-    LOG("[ERROR] Failed to create input handler");
-    xcb_ewmh_connection_wipe(ewmh);
-    xcb_disconnect(conn);
-    free(ewmh);
-    goto fail;
-  }
-  /* handler->focus_ctx = x11_focus_init(conn, ewmh); */
-  handler->ewmh = ewmh;
+  handler->modifier_mask = 0; // Initialize modifier mask
 
-  if (!handler->focus_ctx)
-    goto fail;
-
-  if (!handler->menu_manager)
-    goto fail;
   menu_manager_connect(handler->menu_manager, conn, handler->focus_ctx, ewmh);
-  x11_set_window_floating(handler->focus_ctx, root);
+  // x11_set_window_floating(handler->focus_ctx, root); // Is this needed
+  // here? Maybe in menu activation?
+
   if (!x11_grab_inputs(handler->focus_ctx, root)) {
     fprintf(stderr, "[INPUT] Failed to grab inputs\n");
-    goto fail;
+    goto fail_focus; // Cleanup focus context and root window memory
   }
+
   // Additional initialization steps...
-  return;
-fail:
-  if (handler) {
-    input_handler_destroy(handler);
-  }
-  if (handler->menu_manager)
-    menu_manager_destroy(handler->menu_manager);
-  /* if (handler->focus_ctx) */
-  /*   x11_focus_cleanup(handler->focus_ctx); */
+  LOG("[SETUP] Input handler X setup successful");
+  return true; // Success
 
-  /* if (ewmh) { */
-  /*   xcb_ewmh_connection_wipe(ewmh); */
-  /* } */
-  /* if (ewmh) { */
-  /*   free(ewmh); */
-  /* } */
-  /* if (conn) { */
-  /*   xcb_disconnect(conn); */
-  /*   free(conn); */
-  /* } */
-  /* if (handler->menu_manager) { */
-  /*   free(handler->menu_manager); */
-  /*   free(handler); */
-  /* } */
-  return;
 fail_focus:
-  x11_release_inputs(handler->focus_ctx);
-  x11_focus_cleanup(handler->focus_ctx);
-  free(handler->focus_ctx);
-
+  if (handler->focus_ctx) {
+    // Assuming cleanup handles release implicitly
+    x11_focus_cleanup(handler->focus_ctx);
+    handler->focus_ctx = NULL; // Prevent double free in destroy
+  }
+  free(handler->root); // Free root window memory if allocated
+  handler->root = NULL;
 fail_ewmh:
-  xcb_ewmh_connection_wipe(ewmh);
-  free(ewmh);
+  // Focus context cleanup already happened or wasn't needed
 fail_conn:
-  xcb_disconnect(conn);
-  // Optionally free handler if allocated here
-  return;
+  if (ewmh) {
+    xcb_ewmh_connection_wipe(ewmh);
+    free(ewmh);
+    handler->ewmh = NULL; // Prevent double free in destroy
+  }
+  if (conn) {
+    xcb_disconnect(conn);
+    handler->conn = NULL; // Prevent double free in destroy
+  }
+  // Note: handler itself is not freed here, caller should handle it
+  // menu_manager is also not destroyed here, handled by input_handler_destroy
+  LOG("[SETUP] Input handler X setup failed");
+  return false; // Failure
 }
 /* void input_handler_setup_x(InputHandler *handler) { */
 /*   xcb_connection_t *conn = xcb_connect(NULL, NULL); */
@@ -233,47 +274,49 @@ void input_handler_destroy(InputHandler *handler) {
     return;
   LOG("[DESTROY] Destroying input handler:root");
 
-  /* if (handler->root) { */
-  /*   free(handler->root); */
-  /* } */
+  if (handler->root) {
+    free(handler->root); // Free the allocated memory for root window ID
+    handler->root = NULL;
+  }
+
+  LOG("[DESTROY] Destroying input handler:focus");
+  if (handler->focus_ctx) {
+    // Assuming x11_focus_cleanup also handles releasing inputs if grabbed
+    x11_focus_cleanup(handler->focus_ctx);
+    // No need to free handler->focus_ctx itself if cleanup handles it,
+    // otherwise free(handler->focus_ctx);
+    handler->focus_ctx = NULL;
+  }
+
   LOG("[DESTROY] Destroying input handler:ewmh");
   if (handler->ewmh) {
     xcb_ewmh_connection_wipe(handler->ewmh);
     free(handler->ewmh);
+    handler->ewmh = NULL;
   }
-  LOG("[DESTROY] Destroying input handler:focus");
-  if (handler->focus_ctx) {
-    /* x11_release_inputs(handler->focus_ctx); */
-    x11_focus_cleanup(handler->focus_ctx);
-  }
+
   LOG("[DESTROY] Destroying input handler:menumgr");
   if (handler->menu_manager) {
     LOG("[DESTROY] Destroying menu manager");
-    /* menu_manager_destroy(handler->menu_manager); */
+    menu_manager_destroy(handler->menu_manager); // Now destroying the manager
+    handler->menu_manager = NULL;
   }
 
-  /* if (handler->screen) { */
-
-  /* } */
   LOG("[DESTROY] Destroying input handler:conn");
   if (handler->conn) {
-    // valid connection?
-    if (xcb_connection_has_error(handler->conn)) {
-      LOG("[DESTROY] Connection error detected");
-
-    } else {
-
-      xcb_disconnect(handler->conn);
-    }
+    // No need to check for errors, just disconnect if it exists
+    xcb_disconnect(handler->conn);
+    handler->conn = NULL;
   }
-  LOG("[DESTROY] Destroying input handler:activation");
-  if (handler->activation_states) {
-    free(handler->activation_states);
-  }
+
+  // LOG("[DESTROY] Destroying input handler:activation");
+  // if (handler->activation_states) { // Removed - field seems
+  // unused/unallocated
+  //   free(handler->activation_states);
+  // }
+
   LOG("[DESTROY] Destroying input handler:handler");
   free(handler);
-  /* if (handler) */
-  /*   free(handler); */
 }
 
 static bool update_callback(Menu *menu, struct timeval *last_update,
@@ -428,13 +471,17 @@ bool input_handler_handle_event(InputHandler *handler,
 
     /* menu_manager_handle_key_release(handler->menu_manager, kr); TODO
      * maybe later*/
-    if (is_modifier_release(kr->state, kr->detail)) {
-      LOG("[IH-RELEASE] Exiting because modifier release");
-      if (handler->menu_manager->active_menu) {
+    Menu *active_menu = handler->menu_manager->active_menu;
+    if (active_menu) {
+      uint16_t menu_mod = active_menu->config.mod_key;
+      if (is_modifier_release(kr->detail, menu_mod)) {
         menu_confirm_selection(handler->menu_manager->active_menu);
+        LOG("[IH-RELEASE] Exiting because menu modifier (0x%x) "
+            "released (key %u)",
+            menu_mod, kr->detail);
         menu_manager_deactivate(handler->menu_manager);
+        return true;
       }
-      return true;
     }
     LOG("[IH-RELEASE] FINALIZING,exit=%d", false);
     return false;
@@ -445,14 +492,23 @@ bool input_handler_handle_event(InputHandler *handler,
   }
 }
 
-Menu *input_handler_add_menu(InputHandler *handler, MenuConfig *config) {
-  if (!handler || !config)
-    return false;
-  LOG("[HANDLER->MANAGER] Adding menu: [%s]", config->title);
-  Menu *menu = menu_create(config);
-  menu_manager_register(handler->menu_manager, menu);
-  // TODO free (config)?
-  return menu;
+// Adds an already created menu to the input handler's menu manager.
+Menu *input_handler_add_menu(InputHandler *handler, Menu *menu) {
+  if (!handler || !menu || !handler->menu_manager) {
+    // Return NULL if handler, menu, or manager is invalid
+    return NULL;
+  }
+  LOG("[HANDLER->MANAGER] Adding menu: [%s]", menu->config.title);
+
+  // Register the provided menu with the manager
+  if (menu_manager_register(handler->menu_manager, menu)) {
+    return menu; // Return the menu if registration is successful
+  } else {
+    LOG("[ERROR] Failed to register menu: [%s]", menu->config.title);
+    return NULL; // Return NULL if registration fails
+  }
+  // Note: Ownership of the 'menu' pointer is effectively transferred
+  // to the menu_manager upon successful registration.
 }
 
 // TODO any use?

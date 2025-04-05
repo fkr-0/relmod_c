@@ -221,6 +221,8 @@ void cairo_menu_deactivate(Menu *menu) {
   CairoMenuData *data = menu->user_data;
 
   cairo_menu_animation_hide(data, menu);
+  cairo_menu_render_request_update(data);
+  cairo_menu_render_hide(data);
   LOG("[%s] Menu deactivated.\n", menu->config.title);
 }
 

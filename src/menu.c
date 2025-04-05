@@ -246,8 +246,11 @@ void menu_trigger_update(Menu *menu) {
 void menu_redraw(Menu *menu) {
   if (!menu)
     return;
-  cairo_menu_render_request_update(menu->user_data);
-  cairo_menu_render_show(menu->user_data);
+  // Only redraw if Cairo data exists (i.e., Cairo backend is set up)
+  if (menu->user_data) {
+      cairo_menu_render_request_update(menu->user_data);
+      cairo_menu_render_show(menu->user_data);
+  }
 }
 
 void menu_set_on_select_callback(Menu *menu,
@@ -259,10 +262,11 @@ void menu_set_on_select_callback(Menu *menu,
 }
 
 void menu_trigger_on_select(Menu *menu) {
-  LOG("Triggering on select %p with item %p and data %p, callback:%p",
-      menu_get_selected_item(menu), menu->user_data, menu, menu->on_select);
+  MenuItem *item = menu_get_selected_item(menu); // Get item first
+  LOG("Triggering on select menu=%p with item=%p, user_data=%p, callback=%p",
+      (void*)menu, (void*)item, (void*)menu->user_data, (void*)menu->on_select);
   if (menu && menu->on_select) {
-    MenuItem *item = menu_get_selected_item(menu);
+    // Item already fetched above
     LOG("Triggering with item %p and data %p", item, menu->user_data);
     if (item) {
       menu->on_select(item, menu->user_data);

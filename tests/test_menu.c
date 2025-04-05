@@ -1,6 +1,8 @@
 /* test_menu.c - Unit tests for menu functionality */
 #include "../src/menu.h"
 #include <assert.h>
+#include <unistd.h> // For usleep
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,6 +28,19 @@ static void test_action(void *user_data) {
 static MockX11 setup_mock_x11(void) {
   MockX11 mock = {0};
   mock.conn = xcb_connect(NULL, NULL);
+
+  int retries = 7;
+  while ((!mock.conn || xcb_connection_has_error(mock.conn)) && retries-- > 0) {
+    if (mock.conn)
+      xcb_disconnect(mock.conn); // Disconnect previous failed attempt
+    mock.conn = NULL;            // Ensure conn is NULL if connect fails below
+    fprintf(stderr,
+            "[WARN] Failed to connect to X server, retrying (%d left)...\n",
+            retries + 1);
+    usleep(500000); // Wait 500ms
+    mock.conn = xcb_connect(NULL, NULL);
+  }
+  assert(!xcb_connection_has_error(mock.conn));
   /* assert(!xcb_connection_has_error(mock.conn)); */
 
   xcb_screen_t *screen =
@@ -101,7 +116,13 @@ static void test_menu_navigation(void) {
                       {.id = "2", .label = "Item 2", .action = test_action},
                       {.id = "3", .label = "Item 3", .action = test_action}};
 
-  MenuConfig config = {.title = "Nav Test", .items = items, .item_count = 3};
+  MenuConfig config = {
+      .title = "Nav Test",
+      .items = items,
+      .item_count = 3,
+      .nav = {.next = {.key = 44, .label = "j"}, // Default nav keys
+              .prev = {.key = 45, .label = "k"},
+              .direct = {.keys = (uint8_t[]){10, 11, 12}, .count = 3}}};
 
   Menu *menu = menu_create(&config);
   assert(menu != NULL);
@@ -137,6 +158,7 @@ static void test_menu_navigation(void) {
   /* Clean up */
   menu_destroy(menu);
   cleanup_mock_x11(&mock);
+  mock.focus_ctx = NULL; /* Avoid double free */
 
   printf("Menu navigation test passed\n");
 }
@@ -182,6 +204,7 @@ static void test_menu_activation(void) {
   /* Clean up */
   menu_destroy(menu);
   cleanup_mock_x11(&mock);
+  mock.focus_ctx = NULL; /* Avoid double free */
 
   printf("Menu activation test passed\n");
 }

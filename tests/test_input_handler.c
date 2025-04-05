@@ -28,10 +28,8 @@ void test_input_handler_handle_key_fn() {
 
   InputHandler *handler = input_handler_create();
 
-  input_handler_setup_x(handler);
-  xcb_ewmh_connection_t ewmh = *handler->ewmh;
-  xcb_intern_atom_cookie_t *cookie = xcb_ewmh_init_atoms(handler->conn, &ewmh);
-  assert(xcb_ewmh_init_atoms_replies(&ewmh, cookie, NULL));
+  assert(input_handler_setup_x(handler) && "Input handler X setup failed");
+  // EWMH is initialized within input_handler_setup_x
   xcb_connection_t *conn = handler->conn;
   assert(conn);
 
@@ -54,9 +52,8 @@ void test_input_handler_handle_key_fn() {
 
   assert(item);
 
-  menu_config_destroy(menu_config);
-  xcb_ewmh_connection_wipe(&ewmh);
-  xcb_disconnect(conn);
+  menu_config_destroy(menu_config); // Destroy the config created locally
+  // Let input_handler_destroy handle EWMH wipe and connection disconnect
   input_handler_destroy(handler);
   // Cleanup (after exit)
 }
@@ -64,10 +61,8 @@ void test_input_handler_handle_key_fn() {
 void test_activation_state() {
   InputHandler *handler = input_handler_create();
 
-  input_handler_setup_x(handler);
-  xcb_ewmh_connection_t ewmh = *handler->ewmh;
-  xcb_intern_atom_cookie_t *cookie = xcb_ewmh_init_atoms(handler->conn, &ewmh);
-  assert(xcb_ewmh_init_atoms_replies(&ewmh, cookie, NULL));
+  assert(input_handler_setup_x(handler) && "Input handler X setup failed");
+  // EWMH is initialized within input_handler_setup_x
   xcb_connection_t *conn = handler->conn;
   assert(conn);
 
@@ -88,14 +83,17 @@ void test_activation_state() {
 
   MenuConfig *menu_config = menu_builder_finalize(&builder);
 
+  Menu *menu = menu_create(menu_config);
+  assert(menu);
+
   // Simulate key press to activate menu
   xcb_key_press_event_t event = {
       .response_type = XCB_KEY_PRESS, .detail = 31, .state = 0x40};
-  input_handler_add_menu(handler, menu_config);
+  input_handler_add_menu(handler, menu);
   assert(input_handler_handle_activation(handler, event.state, event.detail));
 
-  xcb_ewmh_connection_wipe(&ewmh);
-  xcb_disconnect(conn);
+  // Let input_handler_destroy handle EWMH wipe and connection disconnect
+  // menu_config is managed by the handler now, so don't destroy it here.
   input_handler_destroy(handler);
 }
 

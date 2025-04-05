@@ -62,7 +62,8 @@ static MenuConfig build_menu_config(WindowMenu *wm, uint16_t modifier_mask,
 }
 
 WindowMenu *window_menu_create(xcb_connection_t *conn, WindowList *window_list,
-                               uint16_t modifier_mask, uint8_t trigger_key) {
+                               uint16_t modifier_mask, uint8_t trigger_key,
+                               xcb_ewmh_connection_t *ewmh) {
   // Allocate the WindowMenu structure.
   WindowMenu *wm = calloc(1, sizeof(WindowMenu));
   if (!wm) {
@@ -71,7 +72,7 @@ WindowMenu *window_menu_create(xcb_connection_t *conn, WindowList *window_list,
   }
   wm->conn = conn;
   wm->window_list = window_list;
-
+  wm->ewmh = ewmh; // Store the ewmh pointer
   // Build the MenuConfig from the window list.
   MenuConfig config = build_menu_config(wm, modifier_mask, trigger_key);
 
@@ -105,7 +106,7 @@ xcb_window_t window_menu_get_selected(WindowMenu *wm) {
 void window_menu_update_windows(WindowMenu *wm) {
   if (wm && wm->menu && wm->window_list) {
     // Update the window list (function provided elsewhere).
-    window_list_update(wm->window_list, wm->conn);
+    window_list_update(wm->window_list, wm->conn, wm->ewmh); // Pass stored ewmh
     // Free existing menu item metadata.
     for (size_t i = 0; i < wm->menu->config.item_count; i++) {
       free(wm->menu->config.items[i].metadata);

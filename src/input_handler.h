@@ -2,6 +2,7 @@
 #ifndef INPUT_HANDLER_H
 #define INPUT_HANDLER_H
 
+#include <stdbool.h> // For bool type
 #include "menu_manager.h"
 #include "x11_focus.h"
 #include <xcb/xcb.h>
@@ -21,14 +22,14 @@ typedef struct {
 
 /* Initialize input handler with menu manager */
 InputHandler *input_handler_create();
-void input_handler_setup_x(InputHandler *handler);
+bool input_handler_setup_x(InputHandler *handler);
 bool input_handler_is_connected(InputHandler *handler);
 void input_handler_destroy(InputHandler *handler);
 
 /* Process a single input event */
 bool input_handler_process_event(InputHandler *handler);
 
-Menu *input_handler_add_menu(InputHandler *handler, MenuConfig *config);
+Menu *input_handler_add_menu(InputHandler *handler, Menu *menu);
 /* bool input_handler_remove_menu(InputHandler *handler, Menu *menu); */
 
 /* Add activation state */

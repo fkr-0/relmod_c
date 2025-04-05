@@ -81,7 +81,8 @@ static Menu *create_benchmark_menu(MockX11 *mock) {
               .direct = {.keys = (uint8_t[]){10, 11, 12, 13}, .count = 4}}};
 
   InputHandler *handler = input_handler_create();
-  Menu *menu = input_handler_add_menu(handler, &config);
+  Menu *menu = menu_create(&config);
+  input_handler_add_menu(handler, menu);
 
   /* Clean up item labels */
   for (int i = 0; i < MENU_ITEMS; i++) {

@@ -96,7 +96,7 @@ static char *get_window_title(xcb_connection_t *conn, xcb_window_t window) {
   return strdup("<Untitled>");
 }
 
-WindowList *window_list_init(xcb_connection_t *conn) {
+WindowList *window_list_init(xcb_connection_t *conn, xcb_ewmh_connection_t *ewmh) {
   printf("Initializing window list\n");
   WindowList *list = malloc(sizeof(WindowList));
   if (!list)
@@ -110,7 +110,7 @@ WindowList *window_list_init(xcb_connection_t *conn) {
 
   list->count = 0;
   list->capacity = INITIAL_CAPACITY;
-  window_list_update(list, conn);
+  window_list_update(list, conn, ewmh); // Pass ewmh here
   return list;
 }
 
@@ -144,24 +144,22 @@ static void get_window_class_name(xcb_connection_t *conn, xcb_window_t window,
   }
 }
 
-void window_list_update(WindowList *list, xcb_connection_t *conn) {
+void window_list_update(WindowList *list, xcb_connection_t *conn, xcb_ewmh_connection_t *ewmh) {
   printf("Updating window list\n");
-  xcb_ewmh_connection_t ewmh;
-  xcb_intern_atom_cookie_t *ewmh_cookies = xcb_ewmh_init_atoms(conn, &ewmh);
-
-  if (!xcb_ewmh_init_atoms_replies(&ewmh, ewmh_cookies, NULL)) {
-    printf("Failed to initialize EWMH atoms\n");
-    return;
+  // EWMH initialization is now done externally and passed in.
+  if (!ewmh) {
+      fprintf(stderr, "[ERROR] EWMH connection not provided to window_list_update\n");
+      return;
   }
 
   xcb_get_property_cookie_t client_list_cookie =
-      xcb_ewmh_get_client_list_stacking(&ewmh, 0);
+      xcb_ewmh_get_client_list_stacking(ewmh, 0); // Use passed ewmh
 
   xcb_ewmh_get_windows_reply_t windows;
-  if (!xcb_ewmh_get_client_list_stacking_reply(&ewmh, client_list_cookie,
+  if (!xcb_ewmh_get_client_list_stacking_reply(ewmh, client_list_cookie,
                                                &windows, NULL)) {
     printf("Failed to get client list stacking\n");
-    xcb_ewmh_connection_wipe(&ewmh);
+    // No wipe needed here, ewmh is managed externally
     return;
   }
 
@@ -185,7 +183,7 @@ void window_list_update(WindowList *list, xcb_connection_t *conn) {
         realloc(list->windows, sizeof(X11Window) * new_capacity);
     if (!new_windows) {
       xcb_ewmh_get_windows_reply_wipe(&windows);
-      xcb_ewmh_connection_wipe(&ewmh);
+      // No wipe needed here, ewmh is managed externally
       return;
     }
     list->windows = new_windows;
@@ -235,9 +233,9 @@ void window_list_update(WindowList *list, xcb_connection_t *conn) {
     list->windows[list->count].focused = (client_list[i] == focused);
 
     xcb_get_property_cookie_t desktop_cookie =
-        xcb_ewmh_get_wm_desktop(&ewmh, client_list[i]);
+        xcb_ewmh_get_wm_desktop(ewmh, client_list[i]); // Use passed ewmh
     uint32_t desktop;
-    if (xcb_ewmh_get_wm_desktop_reply(&ewmh, desktop_cookie, &desktop, NULL)) {
+    if (xcb_ewmh_get_wm_desktop_reply(ewmh, desktop_cookie, &desktop, NULL)) { // Use passed ewmh
       list->windows[list->count].desktop = desktop;
     } else {
       list->windows[list->count].desktop = 0;
@@ -259,7 +257,7 @@ void window_list_update(WindowList *list, xcb_connection_t *conn) {
   }
 
   xcb_ewmh_get_windows_reply_wipe(&windows);
-  xcb_ewmh_connection_wipe(&ewmh);
+  // No wipe needed here, ewmh is managed externally
 }
 
 /* Filter the window list based on the given filter function.

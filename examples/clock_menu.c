@@ -3,6 +3,7 @@
 #include "../src/cairo_menu.h"
 #include "../src/menu_manager.h"
 #include "../src/input_handler.h"
+#include <stdbool.h>
 #include <string.h>
 #include <time.h>
 #include <sys/time.h>
@@ -74,7 +75,8 @@ static ClockData* clock_data_create(void) {
 }
 
 /* Clean up clock data */
-static void clock_data_destroy(ClockData* data) {
+static void clock_data_destroy(void* user_data) {
+    ClockData* data = (ClockData*)user_data;
     if (!data) return;
 
     if (data->time_labels) {
@@ -108,32 +110,44 @@ static void clock_update(Menu* menu, void* user_data) {
 }
 
 /* Create clock menu */
-Menu* create_clock_menu(xcb_connection_t* conn, xcb_window_t root) {
-    /* Create and initialize clock data */
+// Creates the clock menu configuration and menu structure.
+// The caller is responsible for registering it with a MenuManager/InputHandler
+// and setting up rendering.
+Menu* create_clock_menu(void) {
+    // Create and initialize clock data
     ClockData* data = clock_data_create();
     if (!data) return NULL;
 
-    /* Create menu items */
+    // Create menu items dynamically based on clock data
     MenuItem* items = calloc(FORMAT_COUNT, sizeof(MenuItem));
     if (!items) {
         clock_data_destroy(data);
         return NULL;
     }
 
-    /* Initialize menu items */
+    // Initialize menu items using the initial time labels
     for (size_t i = 0; i < FORMAT_COUNT; i++) {
         items[i] = (MenuItem){
-            .id = TIME_FORMATS[i],
-            .label = data->time_labels[i],
+            .id = strdup(TIME_FORMATS[i]), // Use format string as ID, needs freeing
+            .label = strdup(data->time_labels[i]), // Copy initial label, needs freeing
             .action = clock_action,
-            .metadata = NULL
+            .metadata = NULL // Action doesn't need metadata
         };
+        // Check allocation success
+        if (!items[i].id || !items[i].label) {
+             for(size_t j = 0; j <= i; ++j) { free((void*)items[j].id); free((void*)items[j].label); }
+             free(items);
+             clock_data_destroy(data);
+             return NULL;
+        }
     }
 
-    /* Configure menu */
+    // Configure menu
+    // Note: The items array passed here will be copied by menu_create.
+    // We need to free our allocated items array afterwards.
     MenuConfig config = {
-        .mod_key = XCB_MOD_MASK_4,    /* Super key */
-        .trigger_key = 54,             /* 'c' key */
+        .mod_key = XCB_MOD_MASK_4,    // Super key
+        .trigger_key = 54,             // 'c' key
         .title = "Clock Menu",
         .items = items,
         .item_count = FORMAT_COUNT,
@@ -145,68 +159,80 @@ Menu* create_clock_menu(xcb_connection_t* conn, xcb_window_t root) {
             .activate_on_mod_release = false,
             .activate_on_direct_key = false
         },
-        .style = {
+        .style = { // Example style
             .background_color = {0.1, 0.1, 0.1, 0.9},
             .text_color = {0.8, 0.8, 0.8, 1.0},
             .highlight_color = {0.3, 0.3, 0.8, 1.0},
-            .font_face = "Monospace",  /* Fixed-width font for alignment */
+            .font_face = "Monospace",
             .font_size = 14.0,
             .item_height = 20,
             .padding = 10
         }
     };
 
-    /* Create menu */
-    InputHandler* handler = input_handler_create();
-    input_handler_setup_x(handler);
-    Menu* menu = cairo_menu_init(&config);
-    menu_setup_cairo(handler->conn, handler->screen->root, handler->focus_ctx,
-                    handler->screen, menu);
-    free(items);  /* Menu creates its own copy */
+    // Create the menu using the configuration
+    Menu* menu = menu_create(&config);
 
-    if (!menu || !menu_cairo_is_setup(menu)) {
-        input_handler_destroy(handler);
+    // Free the temporary items array we created (including allocated id/label)
+    // menu_create makes its own copies.
+    for (size_t i = 0; i < FORMAT_COUNT; i++) {
+        free((void*)items[i].id);
+        free((void*)items[i].label);
+    }
+    free(items);
+
+    if (!menu) {
         clock_data_destroy(data);
         return NULL;
     }
 
-    /* Set up menu callbacks */
+    // Set up menu callbacks and user data
     menu->update_cb = clock_update;
-    menu->user_data = data;
+    menu->user_data = data; // Transfer ownership of data to the menu
+    menu->cleanup_cb = clock_data_destroy; // Set cleanup callback for user_data
 
-    /* Configure update interval (1 second) */
+    // Configure update interval (1 second)
     menu_set_update_interval(menu, 1000);
-    input_handler_destroy(handler);
 
     return menu;
 }
 
 /* Example usage */
+// Example main function demonstrating how to use the clock menu
 int main(void) {
-    xcb_connection_t* conn = xcb_connect(NULL, NULL);
-    if (xcb_connection_has_error(conn)) {
-        fprintf(stderr, "Failed to connect to X server\n");
+    // 1. Create the Input Handler and set up X connection
+    InputHandler *handler = input_handler_create();
+    if (!handler) {
+        fprintf(stderr, "Failed to create input handler\n");
         return 1;
     }
+    if (!input_handler_setup_x(handler)) {
+         fprintf(stderr, "Failed to setup X for input handler\n");
+         input_handler_destroy(handler); // Cleanup handler
+         return 1;
+    }
 
-    xcb_screen_t* screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
-    Menu* menu = create_clock_menu(conn, screen->root);
-
-    if (!menu) {
+    // 2. Create the clock menu
+    Menu* clock_menu = create_clock_menu();
+    if (!clock_menu) {
         fprintf(stderr, "Failed to create clock menu\n");
-        xcb_disconnect(conn);
+        input_handler_destroy(handler); // Cleanup handler
         return 1;
     }
 
-    printf("Clock menu created successfully\n");
-    printf("Press Super+C to show clock\n");
+    // 3. Register the menu with the Input Handler's Menu Manager
+    input_handler_add_menu(handler, clock_menu); // Transfers ownership if successful
 
-    // Menu would be registered with menu manager here
-    // menu_manager_register(manager, menu);
+    printf("Clock menu created and registered.\n");
+    printf("Press Super+C to activate.\n");
+    printf("Press ESC or q to exit.\n");
 
-    // Cleanup for test
-    menu_destroy(menu);
-    xcb_disconnect(conn);
+    // 4. Run the input handler's event loop
+    input_handler_run(handler); // This will block until exit
+
+    // 5. Cleanup (Input Handler destroy will also destroy registered menus)
+    printf("Exiting...\n");
+    input_handler_destroy(handler);
 
     return 0;
 }

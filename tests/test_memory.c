@@ -1,6 +1,7 @@
 /* test_memory.c - Memory profiling and leak detection */
 #include "../src/cairo_menu.h"
 #include "../src/input_handler.h"
+#include "../src/menu.h"
 #include "../src/menu_manager.h"
 #include <assert.h>
 #include <stdio.h>
@@ -88,7 +89,8 @@ static void test_menu_memory(void) {
                          .items = items,
                          .item_count = 2};
 
-    Menu *menu = input_handler_add_menu(handler, &config);
+    Menu *menu = menu_create(&config);
+    input_handler_add_menu(handler, menu);
     assert(menu != NULL);
     menu_destroy(menu);
   }
@@ -127,7 +129,8 @@ static void test_menu_operations_memory(void) {
                        .items = items,
                        .item_count = 2};
 
-  Menu *menu = input_handler_add_menu(handler, &config);
+  Menu *menu = menu_create(&config);
+  input_handler_add_menu(handler, menu);
   assert(menu != NULL);
 
   /* Test memory usage during operations */
@@ -181,7 +184,8 @@ static void test_multiple_menus_memory(void) {
                          .items = items,
                          .item_count = 2};
 
-    Menu *menu = input_handler_add_menu(handler, &config);
+    Menu *menu = menu_create(&config);
+    input_handler_add_menu(handler, menu);
     assert(menu != NULL);
     menu_manager_register(manager, menu);
   }

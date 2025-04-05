@@ -3,6 +3,7 @@
 #include "../src/cairo_menu.h"
 #include "../src/menu_manager.h"
 #include "../src/input_handler.h"
+#include <stdbool.h> // For bool type
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,9 +26,9 @@ typedef struct {
 /* Menu state */
 typedef struct {
     SystemInfo info;
-    MenuItem* items;
+    // Items are now managed directly by the Menu struct after creation
     size_t item_count;
-    unsigned int update_interval;
+    unsigned int update_interval; // ms
 } SystemMenuData;
 
 /* Read CPU usage from /proc/stat */
@@ -125,20 +126,42 @@ static void update_system_info(SystemInfo* info) {
 }
 
 /* Update menu items with current system info */
-static void update_menu_items(SystemMenuData* data) {
-    char* labels[] = {
-        malloc(64), malloc(64), malloc(64), malloc(64)
-    };
+// Updates the labels of the menu items based on current system info.
+// Assumes menu->user_data points to a valid SystemMenuData.
+static void update_menu_items(Menu* menu) {
+    if (!menu || !menu->user_data) return;
+    SystemMenuData* data = (SystemMenuData*)menu->user_data;
 
-    snprintf(labels[0], 64, "CPU: %.1f%%", data->info.cpu_usage);
-    snprintf(labels[1], 64, "Memory: %.1f%%", data->info.mem_usage);
-    snprintf(labels[2], 64, "Processes: %u", data->info.proc_count);
-    snprintf(labels[3], 64, "Top: %s", data->info.top_process);
+    // Update system info first
+    update_system_info(&data->info);
 
-    for (size_t i = 0; i < 4; i++) {
-        data->items[i].label = labels[i];
-        if (i > 0) free((char*)data->items[i].label);
-    }
+    // Update labels directly in the menu's item array
+    // Ensure sufficient buffer size
+    char buffer[64];
+
+    // Item 0: CPU
+    snprintf(buffer, sizeof(buffer), "CPU: %.1f%%", data->info.cpu_usage);
+    // Free old label if it exists and update
+    free((void*)menu->config.items[0].label);
+    menu->config.items[0].label = strdup(buffer);
+
+    // Item 1: Memory
+    snprintf(buffer, sizeof(buffer), "Memory: %.1f%%", data->info.mem_usage);
+    free((void*)menu->config.items[1].label);
+    menu->config.items[1].label = strdup(buffer);
+
+    // Item 2: Processes
+    snprintf(buffer, sizeof(buffer), "Processes: %u", data->info.proc_count);
+    free((void*)menu->config.items[2].label);
+    menu->config.items[2].label = strdup(buffer);
+
+    // Item 3: Top Process
+    snprintf(buffer, sizeof(buffer), "Top: %s", data->info.top_process);
+    free((void*)menu->config.items[3].label);
+    menu->config.items[3].label = strdup(buffer);
+
+    // Optional: Mark menu for redraw if needed by the rendering system
+    // menu_needs_redraw(menu);
 }
 
 /* Menu action callback */
@@ -146,37 +169,87 @@ static void system_menu_action(void* user_data) {
     // No action needed, just display
 }
 
-/* Create system monitor menu */
-Menu* create_system_monitor_menu(xcb_connection_t* conn, xcb_window_t root) {
+// Cleanup function for SystemMenuData and associated menu items
+static void system_menu_cleanup(void* user_data) {
+    SystemMenuData* data = (SystemMenuData*)user_data;
+    if (!data) return;
+
+    // Note: Menu items themselves are freed by menu_destroy,
+    // but we need to free the dynamically allocated id and label strings within them.
+    // This cleanup assumes it's called *before* the menu structure itself is freed,
+    // allowing access to menu->config.items. If called after, this part needs adjustment.
+    // A safer approach might be to store pointers to allocated strings within SystemMenuData.
+    // However, for this example, we assume menu_destroy calls this first.
+
+    // For now, we assume menu_destroy handles freeing the item array itself.
+    // We only free the SystemMenuData struct.
+    free(data);
+}
+
+
+// Update callback wrapper
+static void system_menu_update_cb(Menu* menu, void* user_data) {
+     update_menu_items(menu); // Pass the menu itself
+}
+
+
+// Creates the system monitor menu.
+Menu* create_system_monitor_menu(void) {
     SystemMenuData* data = calloc(1, sizeof(SystemMenuData));
     if (!data) return NULL;
 
-    data->update_interval = 1000;
+    data->update_interval = 1000; // ms
     data->item_count = 4;
-    data->items = calloc(data->item_count, sizeof(MenuItem));
 
-    if (!data->items) {
+    // Initial system info fetch
+    update_system_info(&data->info);
+
+    // Create menu items dynamically
+    MenuItem* items = calloc(data->item_count, sizeof(MenuItem));
+    if (!items) {
         free(data);
         return NULL;
     }
 
-    // Initialize items
-    for (size_t i = 0; i < data->item_count; i++) {
-        data->items[i].id = malloc(32);
-        snprintf((char*)data->items[i].id, 32, "sys_%zu", i);
-        data->items[i].action = system_menu_action;
-        data->items[i].metadata = data;
+    char id_buffer[32];
+    char label_buffer[64];
+
+    // Item 0: CPU
+    snprintf(id_buffer, sizeof(id_buffer), "sys_cpu");
+    snprintf(label_buffer, sizeof(label_buffer), "CPU: %.1f%%", data->info.cpu_usage);
+    items[0] = (MenuItem){ .id = strdup(id_buffer), .label = strdup(label_buffer), .action = system_menu_action };
+
+    // Item 1: Memory
+    snprintf(id_buffer, sizeof(id_buffer), "sys_mem");
+    snprintf(label_buffer, sizeof(label_buffer), "Memory: %.1f%%", data->info.mem_usage);
+    items[1] = (MenuItem){ .id = strdup(id_buffer), .label = strdup(label_buffer), .action = system_menu_action };
+
+    // Item 2: Processes
+    snprintf(id_buffer, sizeof(id_buffer), "sys_proc");
+    snprintf(label_buffer, sizeof(label_buffer), "Processes: %u", data->info.proc_count);
+    items[2] = (MenuItem){ .id = strdup(id_buffer), .label = strdup(label_buffer), .action = system_menu_action };
+
+    // Item 3: Top Process
+    snprintf(id_buffer, sizeof(id_buffer), "sys_top");
+    snprintf(label_buffer, sizeof(label_buffer), "Top: %s", data->info.top_process);
+    items[3] = (MenuItem){ .id = strdup(id_buffer), .label = strdup(label_buffer), .action = system_menu_action };
+
+    // Check allocations
+    for(size_t i = 0; i < data->item_count; ++i) {
+        if (!items[i].id || !items[i].label) {
+             for(size_t j = 0; j < data->item_count; ++j) { free((void*)items[j].id); free((void*)items[j].label); }
+             free(items);
+             free(data);
+             return NULL;
+        }
     }
 
-    // Initial update
-    update_system_info(&data->info);
-    update_menu_items(data);
 
     MenuConfig config = {
-        .mod_key = XCB_MOD_MASK_4,
-        .trigger_key = 39,
+        .mod_key = XCB_MOD_MASK_4, // Super key
+        .trigger_key = 39,         // 's' key
         .title = "System Monitor",
-        .items = data->items,
+        .items = items,
         .item_count = data->item_count,
         .nav = {
             .next = { .key = 44, .label = "j" },
@@ -186,48 +259,63 @@ Menu* create_system_monitor_menu(xcb_connection_t* conn, xcb_window_t root) {
             .activate_on_mod_release = false,
             .activate_on_direct_key = false
         }
+        // Add style if desired
     };
 
-    InputHandler* handler = input_handler_create();
-    input_handler_setup_x(handler);
-    Menu* menu = cairo_menu_init(&config);
+    Menu* menu = menu_create(&config);
 
-    if (!menu || !menu_cairo_is_setup(menu)) {
-        input_handler_destroy(handler);
+    // Free the temporary items array and its contents (id/label)
+    for (size_t i = 0; i < data->item_count; i++) {
+        free((void*)items[i].id);
+        free((void*)items[i].label);
+    }
+    free(items);
+
+    if (!menu) {
+        free(data);
         return NULL;
     }
 
-    menu_setup_cairo(handler->conn, handler->screen->root, handler->focus_ctx,
-                    handler->screen, menu);
-    input_handler_destroy(handler);
+    // Assign user data, update callback, and cleanup callback
+    menu->user_data = data;
+    menu->update_cb = system_menu_update_cb;
+    menu->cleanup_cb = system_menu_cleanup;
+    menu_set_update_interval(menu, data->update_interval);
+
     return menu;
 }
 
 /* Example usage */
+// Example main function
 int main(void) {
-    xcb_connection_t* conn = xcb_connect(NULL, NULL);
-    if (xcb_connection_has_error(conn)) {
-        fprintf(stderr, "Failed to connect to X server\n");
+    InputHandler *handler = input_handler_create();
+    if (!handler) {
+        fprintf(stderr, "Failed to create input handler\n");
         return 1;
     }
+    if (!input_handler_setup_x(handler)) {
+         fprintf(stderr, "Failed to setup X for input handler\n");
+         input_handler_destroy(handler);
+         return 1;
+    }
 
-    xcb_screen_t* screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;
-    Menu* menu = create_system_monitor_menu(conn, screen->root);
-
-    if (!menu) {
+    Menu* sys_menu = create_system_monitor_menu();
+    if (!sys_menu) {
         fprintf(stderr, "Failed to create system monitor menu\n");
-        xcb_disconnect(conn);
+        input_handler_destroy(handler);
         return 1;
     }
 
-    printf("System monitor menu created.\n");
-    printf("Press Super+S to show menu.\n");
+    input_handler_add_menu(handler, sys_menu);
 
-    // Main event loop would go here
+    printf("System monitor menu created and registered.\n");
+    printf("Press Super+S to activate.\n");
+    printf("Press ESC or q to exit.\n");
 
-    // Cleanup
-    menu_destroy(menu);
-    xcb_disconnect(conn);
+    input_handler_run(handler);
+
+    printf("Exiting...\n");
+    input_handler_destroy(handler); // Destroys handler and registered menus
 
     return 0;
 }

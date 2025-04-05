@@ -19,11 +19,11 @@ setup_xvfb() {
   fi
 
   # Start Xvfb with tighter error handling
-  sudo Xvfb $DISPLAY -screen 0 1024x768x16 -ac -nolisten tcp &
+  Xvfb $DISPLAY -screen 0 1024x768x16 -ac -nolisten tcp &
   XVFB_PID=$!
 
   # Wait for Xvfb to be ready
-  local max_retries=5
+  local max_retries=10 # Increased retries
   local retry_count=0
 
   while [ $retry_count -lt $max_retries ]; do
@@ -34,7 +34,7 @@ setup_xvfb() {
       return 0
     fi
 
-    sleep 1
+    sleep 2 # Increased sleep duration
     ((retry_count++))
   done
 

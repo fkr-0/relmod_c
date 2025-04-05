@@ -106,7 +106,7 @@ int main(int argc, char *argv[]) {
     LOG("handler->connection: %p", (void *)handler->conn);
 
     xcb_connection_t *conn = handler->conn;
-    WindowList *window_list = window_list_init(conn);
+    WindowList *window_list = window_list_init(conn, handler->ewmh);
 
     SubstringsFilterData sub_data =
         substrings_filter_data((const char *[]){"Chrom", "Firefox"}, 2);
@@ -114,29 +114,47 @@ int main(int argc, char *argv[]) {
     WindowList *window_list_f = window_list_filter(
         window_list, window_filter_substrings_any, &sub_data);
     WindowMenu *window_menu =
-        window_menu_create(conn, window_list_f, SUPER_MASK, 31);
+        window_menu_create(conn, window_list_f, SUPER_MASK, 31, handler->ewmh);
     MenuConfig window_menu_config =
         rebuild_menu_config(window_menu, SUPER_MASK, 31);
-    Menu *m = input_handler_add_menu(handler, &window_menu_config);
-    m->on_select = window_menu_on_select;
+    Menu *menu_obj = menu_create(&window_menu_config); // Create the menu object
+    if (menu_obj) {
+        input_handler_add_menu(handler, menu_obj); // Add the menu object
+        menu_obj->on_select = window_menu_on_select; // Set callback on the created menu
+    } else {
+        fprintf(stderr, "Failed to create menu from config (Super+31)\n");
+        // Handle error: maybe free window_menu_config items if dynamically allocated?
+    }
 
     sub_data = substrings_filter_data((const char *[]){"macs", "Visual"}, 2);
     /* SubstringFilterData sub_data = substring_filter_data("macs"); */
     window_list_f = window_list_filter(window_list,
                                        window_filter_substrings_any, &sub_data);
-    window_menu = window_menu_create(conn, window_list_f, SUPER_MASK, 30);
+    window_menu = window_menu_create(conn, window_list_f, SUPER_MASK, 30, handler->ewmh);
     window_menu_config = rebuild_menu_config(window_menu, SUPER_MASK, 30);
-    m = input_handler_add_menu(handler, &window_menu_config);
-    m->on_select = window_menu_on_select;
+    menu_obj = menu_create(&window_menu_config); // Create the menu object
+    if (menu_obj) {
+        input_handler_add_menu(handler, menu_obj); // Add the menu object
+        menu_obj->on_select = window_menu_on_select; // Set callback on the created menu
+    } else {
+        fprintf(stderr, "Failed to create menu from config (Super+30)\n");
+        // Handle error
+    }
 
     sub_data = substrings_filter_data((const char *[]){"tmux", "kitty"}, 2);
     /* SubstringFilterData sub_data = substring_filter_data("macs"); */
     window_list_f = window_list_filter(window_list,
                                        window_filter_substrings_any, &sub_data);
-    window_menu = window_menu_create(conn, window_list_f, SUPER_MASK, 32);
+    window_menu = window_menu_create(conn, window_list_f, SUPER_MASK, 32, handler->ewmh);
     window_menu_config = rebuild_menu_config(window_menu, SUPER_MASK, 32);
-    m = input_handler_add_menu(handler, &window_menu_config);
-    m->on_select = window_menu_on_select;
+    menu_obj = menu_create(&window_menu_config); // Create the menu object
+    if (menu_obj) {
+        input_handler_add_menu(handler, menu_obj); // Add the menu object
+        menu_obj->on_select = window_menu_on_select; // Set callback on the created menu
+    } else {
+        fprintf(stderr, "Failed to create menu from config (Super+32)\n");
+        // Handle error
+    }
 
     if (xcb_connection_has_error(conn)) {
         fprintf(stderr, "Cannot connect to X server\n");

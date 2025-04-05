@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h> // For usleep
 
 /* Mock X11 environment */
 typedef struct {
@@ -29,6 +30,18 @@ static void test_action(void *user_data) {
 static MockX11 setup_mock_x11(void) {
   MockX11 mock = {0};
   mock.conn = xcb_connect(NULL, NULL);
+
+  int retries = 7;
+  while ((!mock.conn || xcb_connection_has_error(mock.conn)) && retries-- > 0) {
+    if (mock.conn)
+      xcb_disconnect(mock.conn); // Disconnect previous failed attempt
+    mock.conn = NULL;            // Ensure conn is NULL if connect fails below
+    fprintf(stderr,
+            "[WARN] Failed to connect to X server, retrying (%d left)...\n",
+            retries + 1);
+    usleep(500000); // Wait 500ms
+    mock.conn = xcb_connect(NULL, NULL);
+  }
   assert(!xcb_connection_has_error(mock.conn));
 
   mock.screen = xcb_setup_roots_iterator(xcb_get_setup(mock.conn)).data;
