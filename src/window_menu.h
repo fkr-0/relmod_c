@@ -11,9 +11,9 @@
 
 // Structure that wraps our menu and window list together.
 typedef struct {
-  xcb_connection_t *conn;  // XCB connection (needed to activate windows)
-  Menu *menu;              // Pointer to the created Menu from menu.h API
-  WindowList *window_list; // Pointer to our window list
+  xcb_connection_t *conn;      // XCB connection (needed to activate windows)
+  Menu *menu;                  // Pointer to the created Menu from menu.h API
+  WindowList *window_list;     // Pointer to our window list
   xcb_ewmh_connection_t *ewmh; // Pointer to the EWMH connection info
 } WindowMenu;
 
@@ -21,7 +21,7 @@ typedef struct {
 // The created menu is built from the current WindowList.
 WindowMenu *window_menu_create(xcb_connection_t *conn, WindowList *window_list,
                                uint16_t modifier_mask, uint8_t trigger_key,
-                               xcb_ewmh_connection_t *ewmh);
+                               xcb_ewmh_connection_t *ewmh, char *title);
 
 // Returns the currently selected window id from the menu.
 xcb_window_t window_menu_get_selected(WindowMenu *wm);

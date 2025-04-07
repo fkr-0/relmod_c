@@ -105,7 +105,16 @@ static void clock_update(Menu* menu, void* user_data) {
 
     /* Update menu items */
     for (size_t i = 0; i < data->label_count; i++) {
-        menu->config.items[i].label = data->time_labels[i];
+        // Free the old label managed by the menu and duplicate the new one
+        char* new_label = strdup(data->time_labels[i]);
+        if (new_label) {
+             free((void*)menu->config.items[i].label); // Free old menu label
+             menu->config.items[i].label = new_label; // Assign new menu label
+        } else {
+             // Handle allocation failure - log? Keep old label?
+             // For simplicity, we'll keep the old label if strdup fails.
+             fprintf(stderr, "Warning: Failed to update clock label (strdup failed)\n");
+        }
     }
 }
 

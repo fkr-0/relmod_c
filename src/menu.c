@@ -16,20 +16,117 @@
 #include "log.h"
 
 Menu *menu_create(MenuConfig *config) {
-  if (!config)
-    return NULL;
-  Menu *menu = calloc(1, sizeof(Menu));
-  if (!menu)
-    return NULL;
+    if (!config) return NULL;
 
-  menu->config = *config;
-  menu->state = MENU_STATE_INACTIVE;
-  menu->selected_index = 0;
-  menu->update_interval = 0;
-  /* menu->user_data = config->act.user_data; */
-  /* menu->activates_cb = */
-  /*     (bool (*)(uint16_t, uint8_t, void *))config->act.custom_activate; */
-  return menu;
+    Menu *menu = calloc(1, sizeof(Menu));
+    if (!menu) {
+        perror("Failed to allocate Menu struct");
+        return NULL;
+    }
+
+    // --- Perform a deep copy of the configuration ---
+
+    // Copy simple fields
+    menu->config.mod_key = config->mod_key;
+    menu->config.trigger_key = config->trigger_key;
+    menu->config.title = config->title ? strdup(config->title) : NULL; // Duplicate title
+    menu->config.item_count = config->item_count;
+    menu->config.nav = config->nav; // Struct copy is fine for nav (labels are const char*)
+                                    // NOTE: If nav.direct.keys was dynamically allocated in builder,
+                                    // this shallow copy might be insufficient if config is freed later.
+                                    // However, menu_config_destroy frees config->nav.direct.keys,
+                                    // so menu->config.nav.direct.keys becomes dangling.
+                                    // Let's deep copy direct keys too.
+    menu->config.act = config->act; // Struct copy is fine for act
+    menu->config.style = config->style; // Struct copy is fine for style
+
+    // Deep copy direct navigation keys if they exist
+    if (config->nav.direct.count > 0 && config->nav.direct.keys) {
+        menu->config.nav.direct.keys = calloc(config->nav.direct.count, sizeof(uint8_t));
+        if (!menu->config.nav.direct.keys) {
+             perror("Failed to allocate direct nav keys in menu_create");
+             free((void*)menu->config.title);
+             free(menu);
+             return NULL;
+        }
+        memcpy(menu->config.nav.direct.keys, config->nav.direct.keys, config->nav.direct.count * sizeof(uint8_t));
+        // menu->config.nav.direct.count was already copied by struct copy
+    } else {
+        menu->config.nav.direct.keys = NULL;
+        menu->config.nav.direct.count = 0;
+    }
+
+
+    // Deep copy items array
+    if (config->item_count > 0 && config->items) {
+        menu->config.items = calloc(config->item_count, sizeof(MenuItem));
+        if (!menu->config.items) {
+            perror("Failed to allocate items array in menu_create");
+            free((void*)menu->config.title);
+            free(menu->config.nav.direct.keys); // Free copied direct keys
+            free(menu);
+            return NULL;
+        }
+
+        for (size_t i = 0; i < config->item_count; i++) {
+            MenuItem *src_item = &config->items[i];
+            MenuItem *dst_item = &menu->config.items[i];
+
+            // Duplicate id string
+            dst_item->id = src_item->id ? strdup(src_item->id) : NULL;
+            if (src_item->id && !dst_item->id) { // Check if strdup failed
+                 perror("Failed to duplicate item id in menu_create");
+                 // Cleanup partially allocated items in menu->config.items
+                 for(size_t j = 0; j < i; ++j) { free((void*)menu->config.items[j].id); free((void*)menu->config.items[j].label); }
+                 free(menu->config.items);
+                 free((void*)menu->config.title);
+                 free(menu->config.nav.direct.keys);
+                 free(menu);
+                 return NULL;
+            }
+
+            // Duplicate label string
+            dst_item->label = src_item->label ? strdup(src_item->label) : NULL;
+             if (src_item->label && !dst_item->label) { // Check if strdup failed
+                 perror("Failed to duplicate item label in menu_create");
+                 // Cleanup partially allocated items in menu->config.items
+                 free((void*)dst_item->id); // Free the id we just duped for item 'i'
+                 for(size_t j = 0; j < i; ++j) { free((void*)menu->config.items[j].id); free((void*)menu->config.items[j].label); }
+                 free(menu->config.items);
+                 free((void*)menu->config.title);
+                 free(menu->config.nav.direct.keys);
+                 free(menu);
+                 return NULL;
+            }
+
+            // Copy action callback pointer
+            dst_item->action = src_item->action;
+            // Copy metadata pointer (ownership does NOT transfer)
+            dst_item->metadata = src_item->metadata;
+        }
+    } else {
+        menu->config.items = NULL;
+        menu->config.item_count = 0; // Ensure count is 0 if items is NULL
+    }
+
+    // --- Initialize Menu state ---
+    menu->state = MENU_STATE_INACTIVE;
+    menu->selected_index = 0;
+    menu->update_interval = 0; // Default, can be set later
+    menu->user_data = NULL;    // Should be set explicitly after creation if needed
+    menu->cleanup_cb = NULL;   // Should be set explicitly
+    menu->update_cb = NULL;    // Should be set explicitly
+    menu->on_select = NULL;    // Should be set explicitly
+    menu->action_cb = NULL;    // Should be set explicitly
+    menu->focus_ctx = NULL;    // Set via menu_set_focus_context
+
+    // Note: config->act_state is not copied deeply here. It's assumed
+    // menu activation logic will handle initializing the state within the Menu struct later.
+
+    // IMPORTANT: menu_create does NOT free the input 'config' pointer or its contents.
+    // The caller is responsible for calling menu_config_destroy(config) after menu_create returns.
+
+    return menu;
 }
 
 void menu_set_focus_context(Menu *menu, X11FocusContext *ctx) {
@@ -172,26 +269,47 @@ void menu_confirm_selection(Menu *menu) {
 }
 
 void menu_destroy(Menu *menu) {
-  if (!menu)
-    return;
-  if (menu->cleanup_cb)
-    menu->cleanup_cb(menu->user_data);
-  /* if (menu->user_data) */
-  /*   free(menu->user_data); */
-  /* if (menu->config.title) */
-  /*   free(menu->config.title); */
-  /* if (menu->config.nav.direct.keys) */
-  /*   free(menu->config.nav.direct.keys); */
-  /* if (menu->config.items) */
-  /*   free(menu->config.items); */
+    if (!menu) return;
 
-  /* if (menu->user_data) { */
-  /*   CairoMenuData *data = menu->user_data; */
-  /*   cairo_menu_animation_cleanup(data); */
-  /*   free(data); */
-  /* } */
-  /* if (menu) */
-  /*   free(menu); */
+    // 1. Call user-provided cleanup callback first (if any)
+    // This callback might free menu->user_data or other resources associated with it.
+    if (menu->cleanup_cb) {
+        menu->cleanup_cb(menu->user_data);
+        // Note: The cleanup_cb should NOT free menu->user_data if it's managed
+        // by the Cairo backend (like CairoMenuData). That's handled below.
+    }
+
+    // 2. Clean up Cairo-specific data if it exists and is managed here
+    // The user_data (e.g., CairoMenuData) should be cleaned up *only* by the
+    // cleanup_cb assigned during setup (e.g., cairo_menu_cleanup assigned in menu_setup_cairo).
+    // The cleanup_cb is responsible for freeing the user_data struct itself.
+    // Therefore, no separate call to cairo_menu_destroy is needed here.
+    // The check below is redundant if cleanup_cb handles it correctly.
+    /*
+    if (menu->user_data && menu_cairo_is_setup(menu)) {
+         // This block is removed as cleanup_cb handles freeing user_data.
+         // Calling cairo_menu_destroy here would lead to a double free if
+         // cleanup_cb is also set to cairo_menu_cleanup.
+         // cairo_menu_destroy(menu); // REMOVED
+         // menu->user_data = NULL; // cleanup_cb should handle this if it frees user_data
+    }
+    */
+    // If user_data was something else and not freed by cleanup_cb, it's leaked.
+
+    // 3. Free resources allocated by menu_create within menu->config
+    free((void*)menu->config.title); // Free duplicated title
+    if (menu->config.items) {
+        for (size_t i = 0; i < menu->config.item_count; i++) {
+            free((void*)menu->config.items[i].id);    // Free duplicated id
+            free((void*)menu->config.items[i].label); // Free duplicated label
+            // DO NOT free menu->config.items[i].metadata here - ownership belongs elsewhere
+        }
+        free(menu->config.items); // Free the items array itself
+    }
+    free(menu->config.nav.direct.keys); // Free duplicated direct nav keys
+
+    // 4. Free the Menu struct itself
+    free(menu);
 }
 
 MenuItem *menu_get_selected_item(Menu *menu) {
@@ -202,13 +320,15 @@ MenuItem *menu_get_selected_item(Menu *menu) {
 }
 
 void menu_select_next(Menu *menu) {
-  menu_select_index(menu, (menu->selected_index + 1) % menu->config.item_count);
+    if (!menu || menu->config.item_count == 0) return; // Prevent division by zero
+    menu_select_index(menu, (menu->selected_index + 1) % menu->config.item_count);
 }
 
 void menu_select_prev(Menu *menu) {
-  menu_select_index(menu,
-                    (menu->selected_index == 0 ? menu->config.item_count - 1
-                                               : menu->selected_index - 1));
+    if (!menu || menu->config.item_count == 0) return; // Prevent issues with count 0
+    menu_select_index(menu,
+                      (menu->selected_index == 0 ? menu->config.item_count - 1
+                                                 : menu->selected_index - 1));
 }
 
 void menu_select_index(Menu *menu, int index) {

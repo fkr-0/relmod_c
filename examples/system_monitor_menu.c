@@ -141,24 +141,44 @@ static void update_menu_items(Menu* menu) {
 
     // Item 0: CPU
     snprintf(buffer, sizeof(buffer), "CPU: %.1f%%", data->info.cpu_usage);
-    // Free old label if it exists and update
-    free((void*)menu->config.items[0].label);
-    menu->config.items[0].label = strdup(buffer);
+    // Free old label if it exists and update, checking strdup result
+    char* new_label_cpu = strdup(buffer);
+    if (new_label_cpu) {
+        free((void*)menu->config.items[0].label);
+        menu->config.items[0].label = new_label_cpu;
+    } else {
+        fprintf(stderr, "Warning: Failed to update CPU label (strdup failed)\n");
+    }
 
     // Item 1: Memory
     snprintf(buffer, sizeof(buffer), "Memory: %.1f%%", data->info.mem_usage);
-    free((void*)menu->config.items[1].label);
-    menu->config.items[1].label = strdup(buffer);
+    char* new_label_mem = strdup(buffer);
+    if (new_label_mem) {
+        free((void*)menu->config.items[1].label);
+        menu->config.items[1].label = new_label_mem;
+    } else {
+        fprintf(stderr, "Warning: Failed to update Memory label (strdup failed)\n");
+    }
 
     // Item 2: Processes
     snprintf(buffer, sizeof(buffer), "Processes: %u", data->info.proc_count);
-    free((void*)menu->config.items[2].label);
-    menu->config.items[2].label = strdup(buffer);
+    char* new_label_proc = strdup(buffer);
+    if (new_label_proc) {
+        free((void*)menu->config.items[2].label);
+        menu->config.items[2].label = new_label_proc;
+    } else {
+        fprintf(stderr, "Warning: Failed to update Processes label (strdup failed)\n");
+    }
 
     // Item 3: Top Process
     snprintf(buffer, sizeof(buffer), "Top: %s", data->info.top_process);
-    free((void*)menu->config.items[3].label);
-    menu->config.items[3].label = strdup(buffer);
+    char* new_label_top = strdup(buffer);
+    if (new_label_top) {
+        free((void*)menu->config.items[3].label);
+        menu->config.items[3].label = new_label_top;
+    } else {
+        fprintf(stderr, "Warning: Failed to update Top Process label (strdup failed)\n");
+    }
 
     // Optional: Mark menu for redraw if needed by the rendering system
     // menu_needs_redraw(menu);

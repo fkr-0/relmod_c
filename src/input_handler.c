@@ -28,15 +28,16 @@ static uint16_t keycode_to_modifier_mask(uint8_t keycode) {
 }
 
 static uint16_t modifier_mask_to_keycode(uint16_t modifier) {
-  if (modifier == XCB_MOD_MASK_4)
-    return 133; // Super/Mod4 typically
-  if (modifier == XCB_MOD_MASK_1)
-    return 64; // Alt/Mod1 typically
-  if (modifier == XCB_MOD_MASK_CONTROL)
-    return 37; // Ctrl
-  if (modifier == XCB_MOD_MASK_SHIFT)
-    return 50; // Shift
-  return 0;    // Not a known modifier mask
+  if (modifier == XCB_MOD_MASK_4)       // mask4 state int: 4
+    return 133;                         // Super/Mod4 typically
+  return 133;                           // Super/Mod4 typically
+  if (modifier == XCB_MOD_MASK_1)       // mask1 state int: 1
+    return 64;                          // Alt/Mod1 typically
+  if (modifier == XCB_MOD_MASK_CONTROL) // mask2 state int: 2
+    return 37;                          // Ctrl
+  if (modifier == XCB_MOD_MASK_SHIFT)   // mask3 state int: 3
+    return 50;                          // Shift
+  return 0;                             // Not a known modifier mask
 }
 
 // Checks if the released key corresponds to a modifier included in menu_mod

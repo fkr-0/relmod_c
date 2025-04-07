@@ -118,9 +118,17 @@ bool menu_manager_register(MenuManager *mgr, Menu *menu) {
   if (!mgr || !menu)
     return false;
   MenuRegistryEntry *head = (MenuRegistryEntry *)mgr->registry;
+  // Check 1: Pointer equality (quick check)
   if (registry_find(head, menu)) {
-    LOG("Menu already registered: [%s]", menu->config.title);
+    LOG("Menu pointer %p already registered: [%s]", (void*)menu, menu->config.title);
     return false;
+  }
+  // Check 2: Logical identifier (e.g., title) equality
+  // Assuming title should be unique for registration purposes here.
+  // A combination of title + trigger key might be better in a real scenario.
+  if (menu->config.title && registry_find_by_id(head, menu->config.title)) {
+      LOG("Menu with title [%s] already registered.", menu->config.title);
+      return false; // Return false if title already exists
   }
 
   MenuRegistryEntry *entry = calloc(1, sizeof(MenuRegistryEntry));

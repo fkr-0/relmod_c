@@ -49,8 +49,8 @@ void menu_builder_set_activation_state(MenuBuilder *builder, uint16_t mod_key,
 }
 
 MenuConfig *menu_builder_finalize(MenuBuilder *builder) {
-  if (!builder || builder->count == 0)
-    return NULL;
+    // Allow finalizing even if count is 0, return an empty config
+    if (!builder) return NULL;
 
   MenuConfig *config = calloc(1, sizeof(MenuConfig));
   if (!config)

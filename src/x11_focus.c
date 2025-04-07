@@ -173,9 +173,14 @@ static bool take_keyboard(X11FocusContext *ctx, xcb_window_t window,
                           int max_attempts) {
   struct timespec delay = {0, 5000000};
   for (int i = 0; i < max_attempts; i++) {
+    // Grab keyboard input on the specified window
     xcb_grab_keyboard_cookie_t cookie =
-        xcb_grab_keyboard(ctx->conn, true, window, XCB_CURRENT_TIME,
-                          XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+        xcb_grab_keyboard(ctx->conn, 1, /* owner_events = true */
+                          window,       /* grab_window */
+                          XCB_CURRENT_TIME,
+                          XCB_GRAB_MODE_ASYNC, /* pointer_mode */
+                          XCB_GRAB_MODE_ASYNC  /* keyboard_mode */
+                          );
     xcb_grab_keyboard_reply_t *reply =
         xcb_grab_keyboard_reply(ctx->conn, cookie, NULL);
     if (reply) {
@@ -194,11 +199,17 @@ static bool take_pointer(X11FocusContext *ctx, xcb_window_t window,
                          int max_attempts) {
   struct timespec delay = {0, 5000000};
   for (int i = 0; i < max_attempts; i++) {
+    // Grab pointer input on the specified window, confine cursor to it
     xcb_grab_pointer_cookie_t cookie = xcb_grab_pointer(
-        ctx->conn, true, window,
+        ctx->conn,
+        1,      /* owner_events = true */
+        window, /* grab_window */
         XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE |
-            XCB_EVENT_MASK_POINTER_MOTION,
-        XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC, window, XCB_NONE,
+            XCB_EVENT_MASK_POINTER_MOTION, /* event_mask */
+        XCB_GRAB_MODE_ASYNC,               /* pointer_mode */
+        XCB_GRAB_MODE_ASYNC,               /* keyboard_mode */
+        window,                            /* confine_to window */
+        XCB_NONE,                          /* cursor */
         XCB_CURRENT_TIME);
     xcb_grab_pointer_reply_t *reply =
         xcb_grab_pointer_reply(ctx->conn, cookie, NULL);
